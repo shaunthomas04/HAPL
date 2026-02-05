@@ -1,28 +1,37 @@
 #![allow(dead_code)]
 use std::env;
-use std::fs;
+mod util;
+use crate::util::load_html_file;
+
 
 fn main() {
-    // let input_args: Vec<String> = env::args().collect();
-    // let html_file_path: &String = &input_args[1];
-    // let html_file_contents: String = fs::read_to_string(html_file_path)
-    // .expect("Should have been able to read the file");
-    // println!("FilePath: {}", html_file_path);
-    // println!("With text:\n{html_file_contents}");
+    let input_args: Vec<String> = env::args().collect();
+    let html_file_path: &String = &input_args[1];
+
+
+    let html_file_content: String = load_html_file(html_file_path).expect("Unable to load HTML file content");
 
 
 
 
-    // let html: &str = r##"<a href="#"><a href="#">Home</a></a>"##;
-    let html: &str = r#"<div id="my-id" class="weird-class">Hello <span>world!</span> & some text #123</div>"#;
-
-
-    match parse_tag(html) {
-        None => println!("Parsing for {} failed", html),
-        Some(quotient) => {
-            println!("HTML TOKEN- content:{}, tag:{}, id:{:?}, class{:?}", quotient.content, quotient.tag_type, quotient.id, quotient.class)
-        },
+    let tags: Vec<HtmlTag> = parse_tag(&html_file_content);
+    // Check if any tags were found
+    if tags.is_empty() {
+        println!("No tags found in input HTML.");
+    } else {
+        // Iterate over each parsed tag
+        for tag in tags {
+            println!(
+                "TOKEN - content: '{}', tag: '{}', id: {:?}, class: {:?}",
+                tag.content, tag.tag_type, tag.id, tag.class
+            );
+        }
     }
+
+
+
+
+
 
   
 }
@@ -34,60 +43,63 @@ struct HtmlTag {
     tag_type: String,
     id: Option<String>,
     class: Option<String>,
-    // child_tags: Vec<HtmlTag>,
+    // child_tags: Option<Vec<HtmlTag>>,
     content: String
 }
 
+fn parse_tag(input: &str) -> Vec<HtmlTag> {
+    let mut tags: Vec<HtmlTag> = Vec::new();
+    let mut remaining = input.trim();
 
-fn parse_tag(input: &str) -> Option<HtmlTag> {
-    let input = input.trim();
+    while let Some(start) = remaining.find('<') {
+        // Find the closing '>' for the opening tag
+        if let Some(end) = remaining[start..].find('>') {
+            let end = end + start;
+            let raw_tag = remaining[start + 1..end].trim();
 
-    if let Some(start) = input.find('<') {
-        if let Some(end) = input[start..].find('>') {
-            let raw_tag = input[start + 1..start + end].trim();
+            // Get tag name
+            let tag_name = match raw_tag.split_whitespace().next() {
+                Some(name) => name,
+                None => break,
+            };
 
-            // Extract just the tag name (before attributes)
-            let tag_name = raw_tag.split_whitespace().next()?;
-
-            //get the id of the tag if it exists
-            let id_attribute: String;
-            match extract_id_attribute(raw_tag) {
-                None => id_attribute = "None".to_string(),
-                Some(id_attribute_value) => {
-                    id_attribute = id_attribute_value;
-                },
-            }
-
-            let class_attribute: String;
-            match extract_class_attribute(raw_tag) {
-                None => class_attribute = "None".to_string(),
-                Some(class_attribute_value) => {
-                    class_attribute = class_attribute_value;
-                },
-            }
-
-
+            // Extract id and class
+            let id_attribute = extract_id_attribute(raw_tag).unwrap_or_else(|| "None".to_string());
+            let class_attribute = extract_class_attribute(raw_tag).unwrap_or_else(|| "None".to_string());
 
             let closing_tag = format!("</{}>", tag_name);
+            let content_start = end + 1;
 
-            if let Some(close_pos) = input.rfind(&closing_tag) {
-                let content_start = start + end + 1;
-                let content_end = close_pos;
+            // Find the closing tag
+            if let Some(close_pos) = remaining[content_start..].find(&closing_tag) {
+                let content_end = content_start + close_pos;
+                let content = remaining[content_start..content_end].trim();
 
-                let content = input[content_start..content_end].trim();
-
-                return Some(HtmlTag {
+                // Push this tag
+                tags.push(HtmlTag {
                     tag_type: tag_name.to_string(),
                     content: content.to_string(),
                     id: Some(id_attribute),
-                    class: Some(class_attribute)
+                    class: Some(class_attribute),
+                    // child_tags: None, 
                 });
+
+                // Move remaining past this tag
+                remaining = &remaining[content_end + closing_tag.len()..];
+            } else {
+                break; // No closing tag found
             }
+        } else {
+            break; // Malformed tag
         }
+
+        remaining = remaining.trim();
     }
 
-    None
+    tags
 }
+
+
 
 
 fn extract_id_attribute(raw_tag: &str) -> Option<String> {    
