@@ -1,6 +1,6 @@
 #![allow(dead_code)]
-use std::env;
 mod util;
+use std::env;
 use crate::util::load_html_file;
 
 
@@ -13,24 +13,26 @@ fn main() {
 
 
 
-
     let tags: Vec<HtmlTag> = parse_tag(&html_file_content);
     // Check if any tags were found
-    if tags.is_empty() {
-        println!("No tags found in input HTML.");
-    } else {
-        // Iterate over each parsed tag
-        for tag in tags {
-            println!(
-                "TOKEN - content: '{}', tag: '{}', id: {:?}, class: {:?}",
-                tag.content, tag.tag_type, tag.id, tag.class
-            );
-        }
+    // if tags.is_empty() {
+    //     println!("No tags found in input HTML.");
+    // } else {
+    //     // Iterate over each parsed tag
+    //     for tag in tags {
+    //         println!(
+    //             "TOKEN - content: '{}', tag: '{}', id: {:?}, class: {:?}",
+    //             tag.content, tag.tag_type, tag.id, tag.class
+    //         );
+    //     }
+    // }
+
+    for tag in &tags{
+        tag.print_html_tag_structure(0);
     }
 
-
-
-
+    // let tag_1: &HtmlTag = &tags[1];
+    // tag_1.print_html_tag_structure(0);
 
 
   
@@ -43,9 +45,39 @@ struct HtmlTag {
     tag_type: String,
     id: Option<String>,
     class: Option<String>,
-    // child_tags: Option<Vec<HtmlTag>>,
-    content: String
+    content: String,
+    child_tags: Vec<HtmlTag>,
 }
+
+impl HtmlTag {
+    fn print_html_tag_structure(&self, level: usize){
+        let indent = "  ".repeat(level);
+
+        println!("{}Type: {}", indent, self.tag_type);
+        println!("{}Id: {}", indent, self.id.as_deref().unwrap_or("-"));
+        println!("{}Class: {}", indent, self.class.as_deref().unwrap_or("-"));
+        // println!("{}Content: {}", indent, self.content);
+        println!("{}Children:", indent);
+        println!("");
+        for child_tag in &self.child_tags {
+            child_tag.print_html_tag_structure(level + 1);
+        }
+
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 fn parse_tag(input: &str) -> Vec<HtmlTag> {
     let mut tags: Vec<HtmlTag> = Vec::new();
@@ -74,6 +106,7 @@ fn parse_tag(input: &str) -> Vec<HtmlTag> {
             if let Some(close_pos) = remaining[content_start..].find(&closing_tag) {
                 let content_end = content_start + close_pos;
                 let content = remaining[content_start..content_end].trim();
+                let child_tags:Vec<HtmlTag> =  parse_tag(content);
 
                 // Push this tag
                 tags.push(HtmlTag {
@@ -81,7 +114,7 @@ fn parse_tag(input: &str) -> Vec<HtmlTag> {
                     content: content.to_string(),
                     id: Some(id_attribute),
                     class: Some(class_attribute),
-                    // child_tags: None, 
+                    child_tags: child_tags, 
                 });
 
                 // Move remaining past this tag
