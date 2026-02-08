@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 mod util;
 mod html_extractor;
+mod lexer;
 use std::env;
+use crate::lexer::HaplLexer;
 use crate::util::load_html_file;
 use crate::html_extractor::{parse_html_to_tags, HtmlTag};
 
@@ -15,9 +17,17 @@ fn main() {
 
 
     let tags: Vec<HtmlTag> = parse_html_to_tags(&html_file_content);
+    let mut lexer: HaplLexer = HaplLexer::new();
     for tag in &tags{
-        tag.print_html_tag_structure(0);
+        lexer.lex(tag);
     }
+    lexer.print();
+
+
+
+    // for tag in &tags{
+    //     tag.print_html_tag_structure(0);
+    // }
 
   
 }

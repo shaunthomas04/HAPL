@@ -1,16 +1,16 @@
 use crate::util::abbreviate_content;
 
-
-
+//This is not an AST node, it simply represents HTML as a node
 pub struct HtmlTag {
-    tag_type: String,
-    id: Option<String>,
-    class: Option<String>,
-    content: String,
-    child_tags: Vec<HtmlTag>,
+    pub tag_type: String,
+    pub id: Option<String>,
+    pub class: Option<String>,
+    pub content: String,
+    pub child_tags: Vec<HtmlTag>,
 }
 
 impl HtmlTag {
+    //print htmlTag node for debugging purposes
     pub fn print_html_tag_structure(&self, level: usize){
         let indent = "  ".repeat(level);
 
@@ -26,6 +26,7 @@ impl HtmlTag {
 
     }
 }
+
 
 pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
     let mut tags: Vec<HtmlTag> = Vec::new();
