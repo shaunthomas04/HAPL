@@ -2,13 +2,28 @@ use crate::HtmlTag;
 
 #[derive(Debug, Clone)]
 
+
+enum AllowedHtmlTags {
+    span,
+    div
+}
+
+#[derive(Debug, Clone, Copy)]
+enum LexerTagType {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+}
+
 //possible hapl token types
 pub enum HaplToken {
-    OpenTag { name: String },
-    CloseTag { name: String },
+    OpenTag { name: LexerTagType },
+    CloseTag { name: LexerTagType },
     Text(String),
     Number(i64),
 }
+
 
 pub struct HaplLexer {
     tokens: Vec<HaplToken>,
@@ -73,10 +88,48 @@ impl HaplLexer {
             }
         }
     }
+}
 
 
+fn get_arithmetic_tags(operator: &str) -> (HaplToken, HaplToken) {
+    // Map operator string to LexerTagType
+    let tag_type = match operator {
+        "+" => LexerTagType::Add,
+        "-" => LexerTagType::Subtract,
+        "*" => LexerTagType::Multiply,
+        "/" => LexerTagType::Divide,
+        _ => panic!("Unknown operator"),
+    };
 
+    // Create two tokens
+    let token1 = HaplToken::OpenTag { name: tag_type };
+    let token2 = HaplToken::CloseTag { name: tag_type };
 
+    (token1, token2)
+}
 
+// Small function to parse numbers
+fn parse_number(text: &str) -> Option<HaplToken> {
+    if let Ok(n) = text.trim().parse::<i64>() {
+        Some(HaplToken::Number(n))
+    } else {
+        None
+    }
+}
 
+// Small function to parse strings
+fn parse_text(text: &str) -> HaplToken {
+    HaplToken::Text(text.trim().to_string())
+}
+
+// Main function called for HTML tag content
+fn get_literal_value(html_tag_content: &str, tag: &str) -> HaplToken {
+    match tag {
+        "span" => parse_number(html_tag_content).unwrap_or_else(|| {
+            // fallback if number parsing fails
+            parse_text(html_tag_content)
+        }),
+        "p" => parse_text(html_tag_content),
+        _ => parse_text(html_tag_content), // default fallback
+    }
 }

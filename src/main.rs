@@ -24,11 +24,6 @@ fn main() {
     lexer.print();
 
 
-
-    // for tag in &tags{
-    //     tag.print_html_tag_structure(0);
-    // }
-
   
 }
 
