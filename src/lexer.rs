@@ -44,34 +44,50 @@ impl HaplLexer {
 
     // Recursive walk over the HtmlTag tree
     fn walk(&mut self, tag: &HtmlTag) {
-        // opening tag
-        self.tokens.push(HaplToken::OpenTag {
-            name: tag.tag_type.clone(),
-        });
-
-        // leaf node (text or number)
-        if tag.child_tags.is_empty() {
-            let text = tag.content.trim();
-
-            if !text.is_empty() {
-                if let Ok(n) = text.parse::<i64>() {
-                    self.tokens.push(HaplToken::Number(n));
-                } else {
-                    self.tokens.push(HaplToken::Text(text.to_string()));
+        // Check if this is a div tag with an arithmetic operator class
+        if tag.tag_type == "div" {
+            // Try to extract operator from class attribute
+            if let Some(class) = &tag.class {
+                // Check if class is an arithmetic operator
+                if ["+", "-", "*", "/"].contains(&class.as_str()) {
+                    let (open_token, close_token) = get_arithmetic_tags(class);
+                    
+                    // Push opening arithmetic tag
+                    self.tokens.push(open_token);
+                    
+                    // Process children (which should contain numbers)
+                    for child in &tag.child_tags {
+                        self.walk(child);
+                    }
+                    
+                    // Push closing arithmetic tag
+                    self.tokens.push(close_token);
+                    
+                    return; // Early return, we've handled this tag
                 }
             }
         }
-
-        // recurse children nodes
+        
+        // Handle span tags (or other tags) - convert content to numbers/text
+        if tag.tag_type == "span" {
+            if tag.child_tags.is_empty() {
+                let literal = get_literal_value(&tag.content, &tag.tag_type);
+                self.tokens.push(literal);
+            } else {
+                // If span has children, recurse through them
+                for child in &tag.child_tags {
+                    self.walk(child);
+                }
+            }
+            return;
+        }
+        
+        // Default handling for other tags
         for child in &tag.child_tags {
             self.walk(child);
         }
-
-        // closing tag
-        self.tokens.push(HaplToken::CloseTag {
-            name: tag.tag_type.clone(),
-        });
     }
+
 
     pub fn print(&self) {
         if self.tokens.is_empty() {
@@ -81,13 +97,30 @@ impl HaplLexer {
 
         for token in &self.tokens {
             match token {
-                HaplToken::OpenTag { name } => println!("OpenTag({})", name),
-                HaplToken::CloseTag { name } => println!("CloseTag({})", name),
+                HaplToken::OpenTag { name } => {
+                    let op = match name {
+                        LexerTagType::Add => "+",
+                        LexerTagType::Subtract => "-",
+                        LexerTagType::Multiply => "*",
+                        LexerTagType::Divide => "/",
+                    };
+                    println!("OpenTag({})", op);
+                }
+                HaplToken::CloseTag { name } => {
+                    let op = match name {
+                        LexerTagType::Add => "+",
+                        LexerTagType::Subtract => "-",
+                        LexerTagType::Multiply => "*",
+                        LexerTagType::Divide => "/",
+                    };
+                    println!("CloseTag({})", op);
+                }
                 HaplToken::Text(text) => println!("Text(\"{}\")", text),
                 HaplToken::Number(n) => println!("Number({})", n),
             }
         }
     }
+
 }
 
 
