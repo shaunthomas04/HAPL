@@ -1,6 +1,5 @@
 use crate::util::abbreviate_content;
 
-//This is not an AST node, it simply represents HTML as a node
 pub struct HtmlTag {
     pub tag_type: String,
     pub id: Option<String>,
@@ -10,23 +9,24 @@ pub struct HtmlTag {
 }
 
 impl HtmlTag {
-    //print htmlTag node for debugging purposes
-    pub fn print_html_tag_structure(&self, level: usize){
+    pub fn print_html_tag_structure(&self, level: usize) {
         let indent = "  ".repeat(level);
 
         println!("{}Type: {}", indent, self.tag_type);
         println!("{}Id: {}", indent, self.id.as_deref().unwrap_or("-"));
         println!("{}Class: {}", indent, self.class.as_deref().unwrap_or("-"));
-        println!("{}Content: {}", indent, abbreviate_content(&self.content, 100));
-        println!("{}Children:", indent);
-        println!("");
+        println!(
+            "{}Content: {}",
+            indent,
+            abbreviate_content(&self.content, 100)
+        );
+        println!("{}Children:\n", indent);
+
         for child_tag in &self.child_tags {
             child_tag.print_html_tag_structure(level + 1);
         }
-
     }
 }
-
 
 pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
     let mut tags: Vec<HtmlTag> = Vec::new();
@@ -40,22 +40,20 @@ pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
                 remaining = remaining.trim();
                 continue;
             } else {
-                break; // unclosed comment
+                break;
             }
         }
 
-        // Find closing '>' for the opening tag
+        // Find end of opening tag
         if let Some(end) = remaining[start..].find('>') {
             let end = end + start;
             let raw_tag = remaining[start + 1..end].trim();
 
-            // Skip empty tags
             if raw_tag.is_empty() {
                 remaining = &remaining[end + 1..];
                 continue;
             }
 
-            // Get tag name
             let tag_name = match raw_tag.split_whitespace().next() {
                 Some(name) => name,
                 None => {
@@ -64,11 +62,9 @@ pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
                 }
             };
 
-            // Extract attributes
             let id_attribute = extract_id_attribute(raw_tag);
             let class_attribute = extract_class_attribute(raw_tag);
 
-            // Detect self-closing or void tags
             let is_self_closing = raw_tag.ends_with('/');
             let is_void_tag = matches!(
                 tag_name,
@@ -78,7 +74,6 @@ pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
             let content_start = end + 1;
 
             if is_self_closing || is_void_tag {
-                // Self-closing / void tag
                 tags.push(HtmlTag {
                     tag_type: tag_name.to_string(),
                     id: id_attribute,
@@ -92,13 +87,13 @@ pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
                 continue;
             }
 
-            // Normal tag: find closing
-            let closing_tag = format!("</{}>", tag_name);
-            if let Some(close_pos) = remaining[content_start..].find(&closing_tag) {
+            // Proper nested closing tag matching
+            if let Some(close_pos) =
+                find_matching_closing_tag(&remaining[content_start..], tag_name)
+            {
                 let content_end = content_start + close_pos;
                 let content = remaining[content_start..content_end].trim();
 
-                // Recursively parse children
                 let child_tags = parse_html_to_tags(content);
 
                 tags.push(HtmlTag {
@@ -109,64 +104,89 @@ pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
                     child_tags,
                 });
 
-                remaining = &remaining[content_end + closing_tag.len()..];
+                let closing_tag = format!("</{}>", tag_name);
+                remaining =
+                    &remaining[content_end + closing_tag.len()..];
                 remaining = remaining.trim();
             } else {
-                // Malformed tag; skip
                 remaining = &remaining[end + 1..];
                 remaining = remaining.trim();
             }
         } else {
-            break; // malformed tag
+            break;
         }
     }
 
     tags
 }
 
-fn extract_id_attribute(raw_tag: &str) -> Option<String> {    
-    //design choice (im lazy) - splitting at whitespace means cannot use multiple words in a class tag
-    //actually could make some sense to tighten up whats allowed 
+// ✅ NEW: Proper nested tag matcher
+fn find_matching_closing_tag(input: &str, tag_name: &str) -> Option<usize> {
+    let open_pattern = format!("<{}", tag_name);
+    let close_pattern = format!("</{}>", tag_name);
+
+    let mut depth = 1;
+    let mut index = 0;
+
+    while index < input.len() {
+        let next_open = input[index..].find(&open_pattern);
+        let next_close = input[index..].find(&close_pattern);
+
+        match (next_open, next_close) {
+            (Some(o), Some(c)) => {
+                let o = index + o;
+                let c = index + c;
+
+                if o < c {
+                    depth += 1;
+                    index = o + open_pattern.len();
+                } else {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(c);
+                    }
+                    index = c + close_pattern.len();
+                }
+            }
+            (None, Some(c)) => {
+                let c = index + c;
+                depth -= 1;
+                if depth == 0 {
+                    return Some(c);
+                }
+                index = c + close_pattern.len();
+            }
+            _ => break,
+        }
+    }
+
+    None
+}
+
+fn extract_id_attribute(raw_tag: &str) -> Option<String> {
     for part in raw_tag.split_whitespace() {
         if let Some(value) = part.strip_prefix("id=") {
-            // Must start and end with exactly one quote
             if value.starts_with('"') && value.ends_with('"') {
-                let inner: &str = &value[1..value.len() - 1];
-
-                // Reject bad content
-                if inner.contains('"') {
-                    return None;
+                let inner = &value[1..value.len() - 1];
+                if !inner.is_empty() && !inner.contains('"') {
+                    return Some(inner.to_string());
                 }
-                if inner.is_empty() {
-                    return None;
-                }
-
-                return Some(inner.to_string());
             }
         }
     }
     None
 }
 
-fn extract_class_attribute(raw_opening_tag: &str) -> Option<String> {
-    for part in raw_opening_tag.split_whitespace(){
-        if let Some(value) = part.strip_prefix("class="){
-            // Must start and end with exactly one quote
+fn extract_class_attribute(raw_tag: &str) -> Option<String> {
+    for part in raw_tag.split_whitespace() {
+        if let Some(value) = part.strip_prefix("class=") {
             if value.starts_with('"') && value.ends_with('"') {
                 let inner = &value[1..value.len() - 1];
-
-                // Reject bad content
-                if inner.contains('"') {
-                    return None;
+                if !inner.is_empty() && !inner.contains('"') {
+                    return Some(inner.to_string());
                 }
-                if inner.is_empty() {
-                    return None;
-                }
-
-                return Some(inner.to_string());
             }
         }
-
     }
     None
 }

@@ -13,10 +13,15 @@ fn main() {
 
 
     let html_file_content: String = load_html_file(html_file_path).expect("Unable to load HTML file content");
-
-
-
     let tags: Vec<HtmlTag> = parse_html_to_tags(&html_file_content);
+
+
+    //debug print of html file structure
+    // for tag in &tags{
+    //     tag.print_html_tag_structure(0);
+    // }
+
+    //debug hapl tokens
     let mut lexer: HaplLexer = HaplLexer::new();
     for tag in &tags{
         lexer.lex(tag);
