@@ -3,15 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>HAPL Math Test</title>
 </head>
 <body>
+    <!-- Outer subtraction -->
     <div class="-">
-        <span>5</span>
-        <span>10</span>
-        <div class="-" id="second">
-            <span>2</span>
+        <!-- First operand: 20 -->
+        <span>20</span>
+
+        <!-- Second operand: addition 5 + 3 -->
+        <div class="+">
+            <span>5</span>
             <span>3</span>
+        </div>
+
+        <!-- Third operand: multiplication 2 * 4 -->
+        <div class="*">
+            <span>2</span>
+            <span>4</span>
+        </div>
+
+        <!-- Fourth operand: nested subtraction (10 - (1 + 1)) -->
+        <div class="-">
+            <span>10</span>
+            <div class="+">
+                <span>1</span>
+                <span>1</span>
+            </div>
         </div>
     </div>
 </body>

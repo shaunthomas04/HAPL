@@ -1,7 +1,7 @@
 use crate::HtmlTag;
 
-#[derive(Debug, Clone, Copy)]
-enum LexerTagType {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LexerTagType {
     Add,
     Subtract,
     Multiply,
