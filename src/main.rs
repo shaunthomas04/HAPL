@@ -14,6 +14,7 @@ use crate::parser::HaplParser;
 use crate::interpreter::Interpreter;
 use crate::util::load_html_file;
 use crate::html_extractor::{parse_html_to_tags, HtmlTag};
+use crate::ast::{LiteralValue};
 
 
 
@@ -50,7 +51,7 @@ fn main() {
                 token.token_type,
                 HaplTokenType::OpenOperator { .. }
                     | HaplTokenType::CloseOperator { .. }
-                    | HaplTokenType::Number(_)
+                    | HaplTokenType::Literal(LiteralValue::Integer(_))
             )
         })
         .cloned()

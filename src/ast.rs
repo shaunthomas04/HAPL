@@ -15,3 +15,10 @@ pub enum Operator {
     Multiply,
     Divide,
 }
+
+#[derive(Debug, Clone)]
+pub enum LiteralValue {
+    Integer(i64),
+    Double(f64),
+    String(String),
+}

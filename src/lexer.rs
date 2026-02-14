@@ -1,4 +1,6 @@
 use crate::HtmlTag;
+use crate::ast::{LiteralValue, Expr, Operator};
+
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LexerTagType {
@@ -14,14 +16,13 @@ pub enum HaplTokenType {
     CloseOperator { name: LexerTagType },
     OpenHtmlTag { name: String },
     CloseHtmlTag { name: String },
-    Text(String),
-    Number(i64),
+    Literal(LiteralValue),
 }
 
 #[derive(Debug, Clone)]
 pub struct HaplToken {
     pub token_type: HaplTokenType,
-    pub value: Option<String>, // Stores actual value, like "+", "5", "body", etc.
+    pub value: Option<String>, // printable/debug value
 }
 
 impl HaplToken {
@@ -29,29 +30,57 @@ impl HaplToken {
         Self { token_type, value }
     }
 
+    // -----------------------------------------
     // Convenience constructors
+    // -----------------------------------------
+
     fn open_operator(name: LexerTagType) -> Self {
-        Self::new(HaplTokenType::OpenOperator { name }, Some(operator_to_str(name).to_string()))
+        Self::new(
+            HaplTokenType::OpenOperator { name },
+            Some(operator_to_str(name).to_string()),
+        )
     }
 
     fn close_operator(name: LexerTagType) -> Self {
-        Self::new(HaplTokenType::CloseOperator { name }, Some(operator_to_str(name).to_string()))
+        Self::new(
+            HaplTokenType::CloseOperator { name },
+            Some(operator_to_str(name).to_string()),
+        )
     }
 
     fn open_html_tag(name: String) -> Self {
-        Self::new(HaplTokenType::OpenHtmlTag { name: name.clone() }, Some(name))
+        Self::new(
+            HaplTokenType::OpenHtmlTag { name: name.clone() },
+            Some(name),
+        )
     }
 
     fn close_html_tag(name: String) -> Self {
-        Self::new(HaplTokenType::CloseHtmlTag { name: name.clone() }, Some(name))
+        Self::new(
+            HaplTokenType::CloseHtmlTag { name: name.clone() },
+            Some(name),
+        )
     }
 
-    fn text(content: String) -> Self {
-        Self::new(HaplTokenType::Text(content.clone()), Some(content))
+    fn string(content: String) -> Self {
+        Self::new(
+            HaplTokenType::Literal(LiteralValue::String(content.clone())),
+            Some(content),
+        )
     }
 
-    fn number(value: i64) -> Self {
-        Self::new(HaplTokenType::Number(value), Some(value.to_string()))
+    fn double(double_value: f64) -> Self {
+        Self::new(
+            HaplTokenType::Literal(LiteralValue::Double(double_value)),
+            Some(double_value.to_string()),
+        )
+    }
+
+    fn integer(integer_value: i64) -> Self {
+        Self::new(
+            HaplTokenType::Literal(LiteralValue::Integer(integer_value)),
+            Some(integer_value.to_string()),
+        )
     }
 }
 
@@ -69,11 +98,15 @@ impl HaplLexer {
     }
 
     fn walk(&mut self, tag: &HtmlTag) {
+        // -----------------------------------------
         // Arithmetic <div class="+">
+        // -----------------------------------------
         if tag.tag_type == "div" {
             if let Some(class) = &tag.class {
                 if ["+", "-", "*", "/"].contains(&class.as_str()) {
-                    let (open_token, close_token) = self.get_arithmetic_tags(class);
+                    let (open_token, close_token) =
+                        self.get_arithmetic_tags(class);
+
                     self.tokens.push(open_token);
 
                     for child in &tag.child_tags {
@@ -86,7 +119,9 @@ impl HaplLexer {
             }
         }
 
+        // -----------------------------------------
         // <span> → ONLY emit literal
+        // -----------------------------------------
         if tag.tag_type == "span" {
             if tag.child_tags.is_empty() && !tag.content.trim().is_empty() {
                 let token = self.parse_literal(&tag.content);
@@ -99,21 +134,27 @@ impl HaplLexer {
             return;
         }
 
+        // -----------------------------------------
         // Structural HTML tags
+        // -----------------------------------------
         let structural = ["html", "head", "body", "title"];
 
         if structural.contains(&tag.tag_type.as_str()) {
-            self.tokens.push(HaplToken::open_html_tag(tag.tag_type.clone()));
+            self.tokens
+                .push(HaplToken::open_html_tag(tag.tag_type.clone()));
 
             for child in &tag.child_tags {
                 self.walk(child);
             }
 
-            self.tokens.push(HaplToken::close_html_tag(tag.tag_type.clone()));
+            self.tokens
+                .push(HaplToken::close_html_tag(tag.tag_type.clone()));
             return;
         }
 
+        // -----------------------------------------
         // Generic leaf literal
+        // -----------------------------------------
         if tag.child_tags.is_empty() && !tag.content.trim().is_empty() {
             let token = self.parse_literal(&tag.content);
             self.tokens.push(token);
@@ -128,10 +169,18 @@ impl HaplLexer {
         for token in &self.tokens {
             match &token.token_type {
                 HaplTokenType::OpenOperator { name } => {
-                    println!("OpenOperator({}) -> {:?}", operator_to_str(*name), token.value);
+                    println!(
+                        "OpenOperator({}) -> {:?}",
+                        operator_to_str(*name),
+                        token.value
+                    );
                 }
                 HaplTokenType::CloseOperator { name } => {
-                    println!("CloseOperator({}) -> {:?}", operator_to_str(*name), token.value);
+                    println!(
+                        "CloseOperator({}) -> {:?}",
+                        operator_to_str(*name),
+                        token.value
+                    );
                 }
                 HaplTokenType::OpenHtmlTag { name } => {
                     println!("OpenHtmlTag({}) -> {:?}", name, token.value);
@@ -139,11 +188,8 @@ impl HaplLexer {
                 HaplTokenType::CloseHtmlTag { name } => {
                     println!("CloseHtmlTag({}) -> {:?}", name, token.value);
                 }
-                HaplTokenType::Text(text) => {
-                    println!("Text(\"{}\") -> {:?}", text, token.value)
-                }
-                HaplTokenType::Number(n) => {
-                    println!("Number({}) -> {:?}", n, token.value)
+                HaplTokenType::Literal(lit) => {
+                    println!("Literal({:?}) -> {:?}", lit, token.value);
                 }
             }
         }
@@ -153,10 +199,14 @@ impl HaplLexer {
         &self.tokens
     }
 
-    // -------------------------------------------------
+    // -----------------------------------------
     // Helpers
-    // -------------------------------------------------
-    fn get_arithmetic_tags(&self, operator: &str) -> (HaplToken, HaplToken) {
+    // -----------------------------------------
+
+    fn get_arithmetic_tags(
+        &self,
+        operator: &str,
+    ) -> (HaplToken, HaplToken) {
         let tag_type = match operator {
             "+" => LexerTagType::Add,
             "-" => LexerTagType::Subtract,
@@ -172,11 +222,20 @@ impl HaplLexer {
     }
 
     fn parse_literal(&self, text: &str) -> HaplToken {
-        if let Ok(num) = text.trim().parse::<i64>() {
-            HaplToken::number(num)
-        } else {
-            HaplToken::text(text.trim().to_string())
+        let trimmed = text.trim();
+
+        // Try integer first
+        if let Ok(num) = trimmed.parse::<i64>() {
+            return HaplToken::integer(num);
         }
+
+        // Try float
+        if let Ok(num) = trimmed.parse::<f64>() {
+            return HaplToken::double(num);
+        }
+
+        // Otherwise string
+        HaplToken::string(trimmed.to_string())
     }
 }
 
