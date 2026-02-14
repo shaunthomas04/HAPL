@@ -3,44 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HAPL Math Test</title>
+    <title>HAPL Comprehensive Test</title>
 </head>
 <body>
 
-    <!-- create a string variable called hello world -->
-    <var class="string" id="hello-world">
-        <span class="string">Hello World</span>
-    </var>
-
-    <var class="hello-world">
-    </var>
-    
-
-    <!-- Outer subtraction -->
-    <div class="-">
-        <!-- First operand: 20 -->
-        <span class="integer">20</span>
-
-        <!-- Second operand: addition 5 + 3 -->
+    <!-- Integer variable declaration -->
+    <var class="integer" id="a">
         <div class="+">
-            <span class="integer">5</span>
-            <span class="integer">3</span>
+            <span class="integer">7</span>
+            <span class="integer">8</span>
         </div>
+    </var>
 
-        <!-- Third operand: multiplication 2 * 4 -->
+    <!-- Double variable declaration -->
+    <var class="double" id="b">
+        <span class="double">3.5</span>
+    </var>
+
+    <!-- String variable declaration -->
+    <var class="string" id="greeting">
+        <span class="string">Hello</span>
+    </var>
+
+    <!-- Variable references -->
+    <var class="a"></var>
+    <var class="b"></var>
+    <var class="greeting"></var>
+
+    <!-- Arithmetic Tests -->
+
+    <!-- Simple addition -->
+    <div class="+">
+        <span class="integer">7</span>
+        <span class="integer">8</span>
+    </div>
+
+    <!-- Addition using variables -->
+    <div class="+">
+        <var class="a"></var>
+        <span class="integer">5</span>
+    </div>
+
+    <!-- Nested arithmetic: (a * 2) + (b / 0.5) -->
+    <div class="+">
         <div class="*">
+            <var class="a"></var>
             <span class="integer">2</span>
-            <span class="integer">4</span>
         </div>
-
-        <!-- Fourth operand: nested subtraction (10 - (1 + 1)) -->
-        <div class="-">
-            <span class="integer">10</span>
-            <div class="+">
-                <span class="integer">1</span>
-                <span class="integer">1</span>
-            </div>
+        <div class="/">
+            <var class="b"></var>
+            <span class="double">0.5</span>
         </div>
     </div>
+
+    <!-- Complex nested operations: ((10 + 5) * 2) - ((b * 2) + a) -->
+    <div class="-">
+        <div class="*">
+            <div class="+">
+                <span class="integer">10</span>
+                <span class="integer">5</span>
+            </div>
+            <span class="integer">2</span>
+        </div>
+        <div class="+">
+            <div class="*">
+                <var class="b"></var>
+                <span class="double">2</span>
+            </div>
+            <var class="a"></var>
+        </div>
+    </div>
+
+    <!-- Optional string concatenation test -->
+    <div class="+">
+        <var class="greeting"></var>
+        <span class="string"> World!</span>
+    </div>
+
 </body>
 </html>
