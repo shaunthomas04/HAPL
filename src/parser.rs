@@ -1,5 +1,5 @@
 use crate::lexer::{HaplToken, HaplTokenType, LexerTagType};
-use crate::ast::{Expr, Operator, LiteralValue};
+use crate::ast::{Expr, Operator};
 
 pub struct HaplParser {
     tokens: Vec<HaplToken>,
@@ -17,11 +17,10 @@ impl HaplParser {
 
     fn parse_expression(&mut self) -> Expr {
         match self.current_token() {
-            HaplTokenType::Literal(LiteralValue::Integer(n)) => {
-                self.advance();
-                Expr::Number(n)
-            }
-
+          HaplTokenType::Literal(lit) => {
+            self.advance();
+            Expr::Literal(lit)
+        }
             HaplTokenType::OpenOperator { name } => {
                 let operator = self.map_operator(name);
                 self.advance(); // consume OpenOperator

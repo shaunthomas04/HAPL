@@ -1,10 +1,28 @@
-#[derive(Debug)]
-pub enum Expr {
-    Number(i64),
+// ast.rs
 
+#[derive(Debug, Clone)]
+pub enum Expr {
+    /// Literal value
+    Literal(LiteralValue),
+
+    /// Arithmetic operation
     Operation {
         op: Operator,
         operands: Vec<Expr>,
+    },
+
+    /// Variable declaration:
+    /// <var class="integer" id="x">...</var>
+    VariableDeclaration {
+        name: String,
+        var_type: StaticType,
+        value: Box<Expr>,
+    },
+
+    /// Variable reference:
+    /// <var class="x"></var>
+    VariableReference {
+        name: String,
     },
 }
 
@@ -21,4 +39,11 @@ pub enum LiteralValue {
     Integer(i64),
     Double(f64),
     String(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum StaticType {
+    Integer,
+    Double,
+    String,
 }
