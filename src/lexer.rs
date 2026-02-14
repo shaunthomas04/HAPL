@@ -124,7 +124,8 @@ impl HaplLexer {
         // -----------------------------------------
         if tag.tag_type == "span" {
             if tag.child_tags.is_empty() && !tag.content.trim().is_empty() {
-                let token = self.parse_literal(&tag.content);
+                let token = self.parse_literal(&tag.content, tag.class.as_deref()
+);
                 self.tokens.push(token);
             } else {
                 for child in &tag.child_tags {
@@ -156,7 +157,8 @@ impl HaplLexer {
         // Generic leaf literal
         // -----------------------------------------
         if tag.child_tags.is_empty() && !tag.content.trim().is_empty() {
-            let token = self.parse_literal(&tag.content);
+            let token = self.parse_literal(&tag.content, tag.class.as_deref()
+);
             self.tokens.push(token);
         } else {
             for child in &tag.child_tags {
@@ -221,22 +223,47 @@ impl HaplLexer {
         )
     }
 
-    fn parse_literal(&self, text: &str) -> HaplToken {
+    fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
         let trimmed = text.trim();
 
-        // Try integer first
-        if let Ok(num) = trimmed.parse::<i64>() {
-            return HaplToken::integer(num);
-        }
+        let class = class_type
+            .expect("Static type required on <span>: expected 'integer', 'double', or 'string'");
 
-        // Try float
-        if let Ok(num) = trimmed.parse::<f64>() {
-            return HaplToken::double(num);
-        }
+        match class {
+            "integer" => {
+                match trimmed.parse::<i64>() {
+                    Ok(num) => HaplToken::integer(num),
+                    Err(_) => panic!(
+                        "Type error: value '{}' is not a valid integer",
+                        trimmed
+                    ),
+                }
+            }
 
-        // Otherwise string
-        HaplToken::string(trimmed.to_string())
-    }
+            "double" => {
+                match trimmed.parse::<f64>() {
+                    Ok(num) => HaplToken::double(num),
+                    Err(_) => panic!(
+                        "Type error: value '{}' is not a valid double",
+                        trimmed
+                    ),
+                }
+            }
+
+            "string" => {
+                // Everything is valid string
+                HaplToken::string(trimmed.to_string())
+            }
+
+            other => {
+                panic!(
+                    "Unknown static type '{}'. Expected 'integer', 'double', or 'string'",
+                    other
+                );
+            }
+        }
+}
+
 }
 
 fn operator_to_str(op: LexerTagType) -> &'static str {
