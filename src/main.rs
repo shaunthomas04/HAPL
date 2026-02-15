@@ -14,7 +14,6 @@ use crate::parser::HaplParser;
 use crate::interpreter::Interpreter;
 use crate::util::load_html_file;
 use crate::html_extractor::{parse_html_to_tags, HtmlTag};
-use crate::ast::{LiteralValue};
 
 fn main() {
     let input_args: Vec<String> = env::args().collect();
@@ -38,43 +37,43 @@ fn main() {
     }
 
     println!("--- TOKENS ---");
-    lexer.print();
+    // lexer.print();
 
-    // 3️⃣ Filter only arithmetic-related tokens
-    let expression_tokens = lexer
-        .tokens()
-        .iter()
-        .filter(|token| {
-            matches!(
-                token.token_type,
-                HaplTokenType::OpenOperator { .. }
-                    | HaplTokenType::CloseOperator { .. }
-                    | HaplTokenType::Literal(LiteralValue::Integer(_))
-            )
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+    let tokens = lexer
+    .tokens()
+    .iter()
+    .filter(|t| {
+        !matches!(
+            t.token_type,
+            HaplTokenType::OpenHtmlTag { .. }
+                | HaplTokenType::CloseHtmlTag { .. }
+        )
+    })
+    .cloned()
+    .collect::<Vec<_>>();
 
-    if expression_tokens.is_empty() {
-        println!("No arithmetic expressions found.");
+
+    if tokens.is_empty() {
+        println!("No tokens found.");
         return;
     }
 
-    // 4️⃣ Parse
-    let mut parser = HaplParser::new(expression_tokens);
-    let ast = parser.parse();
+    // 3️⃣ Parse entire program
+    let mut parser = HaplParser::new(tokens);
+    let ast_nodes = parser.parse_program();
 
     println!("\n--- AST ---");
-    println!("{:#?}", ast);
+    for ast in &ast_nodes {
+        println!("{:#?}", ast);
+    }
 
-    // 5️⃣ Interpret
+    // 4️⃣ Interpret entire program
+    println!("\n--- RESULTS ---");
+
     let mut interpreter = Interpreter::new();
-    let result = interpreter.eval(&ast);
 
-    println!("\n--- RESULT ---");
-    match result {
-        LiteralValue::Integer(n) => println!("{}", n),
-        LiteralValue::Double(f) => println!("{}", f),
-        LiteralValue::String(s) => println!("{}", s),
+    for ast in &ast_nodes {
+        let result = interpreter.eval(ast);
+        println!("{:?}", result);
     }
 }

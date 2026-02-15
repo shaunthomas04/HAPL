@@ -115,6 +115,10 @@ impl Interpreter {
                 Operator::Multiply => LiteralValue::Double(a * *b as f64),
                 Operator::Divide => LiteralValue::Double(a / *b as f64),
             },
+            (LiteralValue::String(a), LiteralValue::String(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Only '+' is supported for strings"),
+            },
             _ => panic!("Arithmetic operations only allowed on numeric types"),
         }
     }

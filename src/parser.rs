@@ -10,32 +10,42 @@ pub struct HaplParser {
 
 impl HaplParser {
     pub fn new(tokens: Vec<HaplToken>) -> Self {
-        Self { 
-            tokens, 
+        Self {
+            tokens,
             position: 0,
             symbol_table: HashMap::new(),
         }
     }
 
-    pub fn parse(&mut self) -> Expr {
-        self.parse_expression()
-    }
+    // --------------------------------------------------
+    // Parse a SINGLE expression
+    // --------------------------------------------------
+    pub fn parse_expression(&mut self) -> Expr {
+        if self.is_at_end() {
+            panic!("Unexpected end of token stream while parsing expression");
+        }
 
-    fn parse_expression(&mut self) -> Expr {
         match self.current_token() {
             HaplTokenType::Literal(lit) => {
                 self.advance();
                 Expr::Literal(lit)
             }
 
+            // -------------------------
+            // Operator
+            // -------------------------
             HaplTokenType::OpenOperator { name } => {
                 let operator = self.map_operator(name);
                 self.advance(); // consume OpenOperator
 
                 let mut operands = Vec::new();
 
-                while !self.check_close_operator(name) {
+                while !self.is_at_end() && !self.check_close_operator(name) {
                     operands.push(self.parse_expression());
+                }
+
+                if self.is_at_end() {
+                    panic!("Operator not properly closed");
                 }
 
                 self.advance(); // consume CloseOperator
@@ -52,21 +62,22 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenVarDec { var_type, name } => {
                 let var_name = name.clone();
-                let var_type_copy = var_type; // Copy because StaticType is Copy
+                let var_type_copy = var_type;
+
                 self.advance(); // consume OpenVarDec
 
-                // Parse the value inside <var>
                 let value_expr = Box::new(self.parse_expression());
 
-                if !self.check_close_var_dec(var_type_copy, &var_name) {
+                if self.is_at_end() || !self.check_close_var_dec(var_type_copy, &var_name) {
                     panic!("Variable '{}' declaration not properly closed", var_name);
                 }
+
                 self.advance(); // consume CloseVarDec
 
-                // Register in symbol table
                 if self.symbol_table.contains_key(&var_name) {
                     panic!("Variable '{}' already declared", var_name);
                 }
+
                 self.symbol_table.insert(var_name.clone(), var_type_copy);
 
                 Expr::VariableDeclaration {
@@ -81,33 +92,70 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenVarRef { name } => {
                 let var_name = name.clone();
+
                 self.advance(); // consume OpenVarRef
 
                 if !self.symbol_table.contains_key(&var_name) {
                     panic!("Variable '{}' used before declaration", var_name);
                 }
 
-                if !self.check_close_var_ref(&var_name) {
+                if self.is_at_end() || !self.check_close_var_ref(&var_name) {
                     panic!("Variable '{}' reference not properly closed", var_name);
                 }
+
                 self.advance(); // consume CloseVarRef
 
                 Expr::VariableReference { name: var_name }
             }
 
-            _ => panic!("Unexpected token in parser at position {}", self.position),
+            _ => panic!(
+                "Unexpected token {:?} at position {}",
+                self.current_token(),
+                self.position
+            ),
         }
     }
 
+    // --------------------------------------------------
+    // Parse an entire program (ALL expressions)
+    // --------------------------------------------------
+    pub fn parse_program(&mut self) -> Vec<Expr> {
+        let mut expressions = Vec::new();
+
+        while !self.is_at_end() {
+            expressions.push(self.parse_expression());
+        }
+
+        expressions
+    }
+
+    // --------------------------------------------------
+    // Helpers
+    // --------------------------------------------------
+
     fn current_token(&self) -> HaplTokenType {
+        if self.is_at_end() {
+            panic!("Tried to access token beyond end of stream");
+        }
+
         self.tokens[self.position].token_type.clone()
     }
 
     fn advance(&mut self) {
-        self.position += 1;
+        if !self.is_at_end() {
+            self.position += 1;
+        }
+    }
+
+    fn is_at_end(&self) -> bool {
+        self.position >= self.tokens.len()
     }
 
     fn check_close_operator(&self, expected: LexerTagType) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
         match self.current_token() {
             HaplTokenType::CloseOperator { name } => name == expected,
             _ => false,
@@ -115,13 +163,23 @@ impl HaplParser {
     }
 
     fn check_close_var_dec(&self, var_type: StaticType, name: &str) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
         match self.current_token() {
-            HaplTokenType::CloseVarDec { var_type: t, name: n } => t == var_type && n == name,
+            HaplTokenType::CloseVarDec { var_type: t, name: n } => {
+                t == var_type && n == name
+            }
             _ => false,
         }
     }
 
     fn check_close_var_ref(&self, name: &str) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+
         match self.current_token() {
             HaplTokenType::CloseVarRef { name: n } => n == name,
             _ => false,
