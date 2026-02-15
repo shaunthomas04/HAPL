@@ -62,10 +62,10 @@ fn main() {
     let mut parser = HaplParser::new(tokens);
     let ast_nodes = parser.parse_program();
 
-    println!("\n--- AST ---");
-    for ast in &ast_nodes {
-        println!("{:#?}", ast);
-    }
+    // println!("\n--- AST ---");
+    // for ast in &ast_nodes {
+    //     println!("{:#?}", ast);
+    // }
 
     // 4️⃣ Interpret entire program
     println!("\n--- RESULTS ---");

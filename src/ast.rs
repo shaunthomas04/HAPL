@@ -24,6 +24,9 @@ pub enum Expr {
     VariableReference {
         name: String,
     },
+
+    /// Print Operation
+    Print { value: Box<Expr> },
 }
 
 #[derive(Debug, Clone, Copy)]

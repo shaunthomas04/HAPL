@@ -20,6 +20,8 @@ pub enum HaplTokenType {
     CloseVarDec { var_type: StaticType, name: String },
     OpenVarRef { name: String },
     CloseVarRef { name: String },
+    OpenPrint,
+    ClosePrint,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,13 @@ impl HaplToken {
             HaplTokenType::Literal(LiteralValue::Integer(integer_value)),
             Some(integer_value.to_string()),
         )
+    }
+    fn open_print() -> Self {
+        Self::new(HaplTokenType::OpenPrint, Some("print".to_string()))
+    }
+
+    fn close_print() -> Self {
+        Self::new(HaplTokenType::ClosePrint, Some("print".to_string()))
     }
 }
 
@@ -215,6 +224,21 @@ impl HaplLexer {
                 self.walk(child);
             }
         }
+
+        // -----------------------------------------
+        // Print <p> tag
+        // -----------------------------------------
+        if tag.tag_type == "p" {
+            self.tokens.push(HaplToken::open_print());
+
+            for child in &tag.child_tags {
+                self.walk(child);
+            }
+
+            self.tokens.push(HaplToken::close_print());
+            return;
+        }
+
     }
 
     pub fn print(&self) {
@@ -246,6 +270,12 @@ impl HaplLexer {
                 }
                 HaplTokenType::CloseVarRef { name } => {
                     println!("CloseVarRef({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenPrint => {
+                    println!("OpenPrint -> {:?}", token.value);
+                }
+                HaplTokenType::ClosePrint => {
+                    println!("ClosePrint -> {:?}", token.value);
                 }
             }
         }

@@ -75,6 +75,19 @@ impl Interpreter {
                     .unwrap_or_else(|| panic!("Variable '{}' used before declaration", name))
                     .clone()
             }
+
+            // -------------------------
+            // Print statement
+            // -------------------------
+            Expr::Print { value } => {
+                let val = self.eval(value); // Evaluate whatever is inside
+                match &val {
+                    LiteralValue::Integer(n) => println!("{}", n),
+                    LiteralValue::Double(f) => println!("{}", f),
+                    LiteralValue::String(s) => println!("{}", s),
+                }
+                val // optionally return value
+            }
         }
     }
 
