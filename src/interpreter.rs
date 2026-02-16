@@ -91,7 +91,40 @@ impl Interpreter {
         }
     }
 
-    fn apply_operator(op: &Operator, lhs: &LiteralValue, rhs: &LiteralValue) -> LiteralValue {
+    fn literal_to_string(val: &LiteralValue) -> String {
+        match val {
+            LiteralValue::Integer(n) => n.to_string(),
+            LiteralValue::Double(f) => f.to_string(),
+            LiteralValue::String(s) => s.clone(),
+        }
+    }
+
+    
+   fn apply_operator(op: &Operator, lhs: &LiteralValue, rhs: &LiteralValue) -> LiteralValue {
+        // ---------------------------------
+        // STRING CONCATENATION (highest priority)
+        // ---------------------------------
+        if let Operator::Add = op {
+            match (lhs, rhs) {
+                (LiteralValue::String(a), LiteralValue::String(b)) => {
+                    return LiteralValue::String(format!("{}{}", a, b));
+                }
+
+                (LiteralValue::String(a), b) => {
+                    return LiteralValue::String(format!("{}{}", a, Self::literal_to_string(b)));
+                }
+
+                (a, LiteralValue::String(b)) => {
+                    return LiteralValue::String(format!("{}{}", Self::literal_to_string(a), b));
+                }
+
+                _ => {}
+            }
+        }
+
+        // ---------------------------------
+        // PURE NUMERIC OPERATIONS
+        // ---------------------------------
         match (lhs, rhs) {
             (LiteralValue::Integer(a), LiteralValue::Integer(b)) => match op {
                 Operator::Add => LiteralValue::Integer(a + b),
@@ -104,6 +137,7 @@ impl Interpreter {
                     LiteralValue::Integer(a / b)
                 }
             },
+
             (LiteralValue::Double(a), LiteralValue::Double(b)) => match op {
                 Operator::Add => LiteralValue::Double(a + b),
                 Operator::Subtract => LiteralValue::Double(a - b),
@@ -115,24 +149,25 @@ impl Interpreter {
                     LiteralValue::Double(a / b)
                 }
             },
-            // Mixed types (Integer + Double) → promote to double
+
+            // Mixed numeric → promote to double
             (LiteralValue::Integer(a), LiteralValue::Double(b)) => match op {
                 Operator::Add => LiteralValue::Double(*a as f64 + b),
                 Operator::Subtract => LiteralValue::Double(*a as f64 - b),
                 Operator::Multiply => LiteralValue::Double(*a as f64 * b),
                 Operator::Divide => LiteralValue::Double(*a as f64 / b),
             },
+
             (LiteralValue::Double(a), LiteralValue::Integer(b)) => match op {
                 Operator::Add => LiteralValue::Double(a + *b as f64),
                 Operator::Subtract => LiteralValue::Double(a - *b as f64),
                 Operator::Multiply => LiteralValue::Double(a * *b as f64),
                 Operator::Divide => LiteralValue::Double(a / *b as f64),
             },
-            (LiteralValue::String(a), LiteralValue::String(b)) => match op {
-                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
-                _ => panic!("Only '+' is supported for strings"),
-            },
-            _ => panic!("Arithmetic operations only allowed on numeric types"),
+
+            _ => panic!("Invalid operand types for operator {:?}", op),
         }
     }
+
+
 }

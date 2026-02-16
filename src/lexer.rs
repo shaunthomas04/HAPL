@@ -317,8 +317,17 @@ impl HaplLexer {
                 .parse::<f64>()
                 .map(HaplToken::double)
                 .unwrap_or_else(|_| panic!("Type error: value '{}' is not a valid double", trimmed)),
-            "string" => HaplToken::string(trimmed.to_string()),
-            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', or 'string'", other),
+            "string" => {
+                if !trimmed.starts_with('"') || !trimmed.ends_with('"') {
+                    panic!(
+                        "String literals must be enclosed in double quotes (\") but got '{}'",
+                        trimmed
+                    );
+                }
+                // Strip the quotes
+                let inner = &trimmed[1..trimmed.len() - 1];
+                HaplToken::string(inner.to_string())
+            }            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', or 'string'", other),
         }
     }
 }
