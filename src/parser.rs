@@ -50,9 +50,19 @@ impl HaplParser {
 
                 self.advance(); // consume CloseOperator
 
-                if operands.len() < 2 {
-                    panic!("Operator requires at least 2 operands");
+                match operator {
+                    Operator::Not => {
+                        if operands.len() != 1 {
+                            panic!("'!' operator requires exactly 1 operand");
+                        }
+                    }
+                    _ => {
+                        if operands.len() < 2 {
+                            panic!("Operator requires at least 2 operands");
+                        }
+                    }
                 }
+
 
                 Expr::Operation { op: operator, operands }
             }
