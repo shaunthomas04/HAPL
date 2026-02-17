@@ -35,6 +35,9 @@ pub enum Operator {
     Subtract,
     Multiply,
     Divide,
+    Or,
+    And,
+    Not
 }
 
 #[derive(Debug, Clone)]

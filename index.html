@@ -2,100 +2,147 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HAPL Comprehensive Test</title>
+    <title>HAPL Full Feature Demo</title>
 </head>
+
 <body>
 
-    <!-- Integer variable declaration -->
+    <!-- ============================= -->
+    <!-- LITERALS -->
+    <!-- ============================= -->
+
+    <p><span class="integer">42</span></p>
+    <p><span class="double">3.14</span></p>
+    <p><span class="string">"Hello HAPL"</span></p>
+    <p><span class="boolean">true</span></p>
+    <p><span class="boolean">false</span></p>
+
+
+    <!-- ============================= -->
+    <!-- VARIABLE DECLARATIONS -->
+    <!-- ============================= -->
+
     <var class="integer" id="a">
         <div class="+">
             <span class="integer">7</span>
             <span class="integer">8</span>
-            <span class="integer">8</span>
         </div>
     </var>
 
-
-    <p>
-        <div class="+">
-            <var class="a"></var>
-            <span class="string">" "</span>
-            <span class="double">3.5</span>
-        </div>
-    </p>
-
-    <span class="boolean">true</span>
-    <var class="boolean" id="abool">
-        <span class="boolean">false</span>
-    </var>
-
-
-    <!-- Double variable declaration -->
     <var class="double" id="b">
-        <span class="double">3.5</span>
+        <span class="double">2.5</span>
     </var>
 
-    <!-- String variable declaration -->
     <var class="string" id="greeting">
         <span class="string">"Hello"</span>
     </var>
 
-    <!-- Variable references -->
-    <var class="a"></var>
-    <var class="b"></var>
-    <var class="greeting"></var>
+    <var class="boolean" id="flag">
+        <span class="boolean">true</span>
+    </var>
 
-    <!-- Arithmetic Tests -->
+
+    <!-- ============================= -->
+    <!-- VARIABLE REFERENCES -->
+    <!-- ============================= -->
+
+    <p><var class="a"></var></p>
+    <p><var class="b"></var></p>
+    <p><var class="greeting"></var></p>
+    <p><var class="flag"></var></p>
+
+
+    <!-- ============================= -->
+    <!-- ARITHMETIC OPERATIONS -->
+    <!-- ============================= -->
 
     <!-- Simple addition -->
-    <div class="+">
-        <span class="integer">7</span>
-        <span class="integer">8</span>
-    </div>
-
-    <!-- Addition using variables -->
-    <div class="+">
-        <var class="a"></var>
-        <span class="integer">5</span>
-    </div>
-
-    <!-- Nested arithmetic: (a * 2) + (b / 0.5) -->
-    <div class="+">
-        <div class="*">
-            <var class="a"></var>
-            <span class="integer">2</span>
-        </div>
-        <div class="/">
-            <var class="b"></var>
-            <span class="double">0.5</span>
-        </div>
-    </div>
-
-    <!-- Complex nested operations: ((10 + 5) * 2) - ((b * 2) + a) -->
-    <div class="-">
-        <div class="*">
-            <div class="+">
-                <span class="integer">10</span>
-                <span class="integer">5</span>
-                <span class="integer">5</span>
-            </div>
-            <span class="integer">2</span>
-        </div>
+    <p>
         <div class="+">
-            <div class="*">
-                <var class="b"></var>
-                <span class="double">2</span>
-            </div>
-            <var class="a"></var>
+            <span class="integer">10</span>
+            <span class="integer">5</span>
         </div>
-    </div>
+    </p>
 
-    <!-- Optional string concatenation test -->
-    <div class="+">
-        <var class="greeting"></var>
-        <span class="string"> " World!"</span>
-    </div>
+    <!-- Subtraction -->
+    <p>
+        <div class="-">
+            <span class="integer">20</span>
+            <span class="integer">3</span>
+        </div>
+    </p>
+
+    <!-- Multiplication -->
+    <p>
+        <div class="*">
+            <span class="integer">6</span>
+            <span class="integer">7</span>
+        </div>
+    </p>
+
+    <!-- Division -->
+    <p>
+        <div class="/">
+            <span class="integer">20</span>
+            <span class="integer">4</span>
+        </div>
+    </p>
+
+    <!-- Mixed numeric promotion -->
+    <p>
+        <div class="+">
+            <span class="integer">5</span>
+            <span class="double">2.5</span>
+        </div>
+    </p>
+
+
+    <!-- ============================= -->
+    <!-- STRING CONCATENATION -->
+    <!-- ============================= -->
+
+    <p>
+        <div class="+">
+            <var class="greeting"></var>
+            <span class="string">" World!"</span>
+        </div>
+    </p>
+
+
+    <!-- ============================= -->
+    <!-- BOOLEAN OPERATIONS -->
+    <!-- ============================= -->
+
+    <!-- AND -->
+    <p>
+        <div class="&&">
+            <span class="boolean">true</span>
+            <span class="boolean">false</span>
+        </div>
+    </p>
+
+    <!-- OR -->
+    <p>
+        <div class="||">
+            <span class="boolean">false</span>
+            <span class="boolean">true</span>
+        </div>
+    </p>
+
+    <!-- NOT -->
+    <p>
+        <div class="!">
+            <span class="boolean">false</span>
+        </div>
+    </p>
+
+    <!-- Boolean using variable -->
+    <p>
+        <div class="&&">
+            <var class="flag"></var>
+            <span class="boolean">true</span>
+        </div>
+    </p>
 
 </body>
 </html>

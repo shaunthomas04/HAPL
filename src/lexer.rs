@@ -7,6 +7,9 @@ pub enum LexerTagType {
     Subtract,
     Multiply,
     Divide,
+    And,
+    Or,
+    Not
 }
 
 #[derive(Debug, Clone)]
@@ -121,6 +124,18 @@ impl HaplLexer {
             if let Some(class) = &tag.class {
                 if ["+", "-", "*", "/"].contains(&class.as_str()) {
                     let (open_token, close_token) = self.get_arithmetic_tags(class);
+
+                    self.tokens.push(open_token);
+
+                    for child in &tag.child_tags {
+                        self.walk(child);
+                    }
+
+                    self.tokens.push(close_token);
+                    return;
+                }
+                if ["&&", "||", "!"].contains(&class.as_str()) {
+                    let (open_token, close_token) = self.get_boolean_tags(class);
 
                     self.tokens.push(open_token);
 
@@ -310,6 +325,17 @@ impl HaplLexer {
         (HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type))
     }
 
+    fn get_boolean_tags(&self, logic_operator: &str) -> (HaplToken, HaplToken) {
+        let tag_type = match logic_operator {
+            "&&" => LexerTagType::And,
+            "||" => LexerTagType::Or,
+            "!" => LexerTagType::Not,
+            _ => panic!("Unknown operator: {}", logic_operator),
+        };
+
+        (HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type))
+    }
+
     fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
         let trimmed = text.trim();
 
@@ -360,5 +386,9 @@ fn operator_to_str(op: LexerTagType) -> &'static str {
         LexerTagType::Subtract => "-",
         LexerTagType::Multiply => "*",
         LexerTagType::Divide => "/",
+        LexerTagType::And => "&&",
+        LexerTagType::Or => "||",
+        LexerTagType::Not => "!",
+
     }
 }

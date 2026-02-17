@@ -250,6 +250,10 @@ impl HaplParser {
             LexerTagType::Subtract => Operator::Subtract,
             LexerTagType::Multiply => Operator::Multiply,
             LexerTagType::Divide => Operator::Divide,
+            LexerTagType::And => Operator::And,
+            LexerTagType::Or => Operator::Or,
+            LexerTagType::Not => Operator::Not,
+
         }
     }
 }

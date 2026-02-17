@@ -2,7 +2,7 @@ use crate::ast::{Expr, Operator, LiteralValue, StaticType};
 use std::collections::HashMap;
 
 pub struct Interpreter {
-    runtime_symbol_table: HashMap<String, LiteralValue>, // runtime environment for variables
+    runtime_symbol_table: HashMap<String, LiteralValue>,
 }
 
 impl Interpreter {
@@ -20,9 +20,23 @@ impl Interpreter {
             Expr::Literal(lit) => lit.clone(),
 
             // -------------------------
-            // Arithmetic operation
+            // Operations (Arithmetic + Boolean)
             // -------------------------
             Expr::Operation { op, operands } => {
+                // Special case: unary NOT
+                if let Operator::Not = op {
+                    if operands.len() != 1 {
+                        panic!("'!' operator requires exactly 1 operand");
+                    }
+
+                    let value = self.eval(&operands[0]);
+
+                    return match value {
+                        LiteralValue::Boolean(b) => LiteralValue::Boolean(!b),
+                        _ => panic!("'!' operator only works on booleans"),
+                    };
+                }
+
                 let mut values: Vec<LiteralValue> =
                     operands.iter().map(|e| self.eval(e)).collect();
 
@@ -30,7 +44,6 @@ impl Interpreter {
                     panic!("Operator requires at least 2 operands");
                 }
 
-                // Use first value as starting point
                 let mut result = values.remove(0);
 
                 for val in values {
@@ -46,7 +59,6 @@ impl Interpreter {
             Expr::VariableDeclaration { name, var_type, value } => {
                 let val = self.eval(value);
 
-                // Check type consistency
                 match (var_type, &val) {
                     (StaticType::Integer, LiteralValue::Integer(_))
                     | (StaticType::Double, LiteralValue::Double(_))
@@ -58,12 +70,11 @@ impl Interpreter {
                     ),
                 }
 
-                // Store in environment
                 if self.runtime_symbol_table.contains_key(name) {
                     panic!("Variable '{}' already declared", name);
                 }
-                self.runtime_symbol_table.insert(name.clone(), val.clone());
 
+                self.runtime_symbol_table.insert(name.clone(), val.clone());
                 val
             }
 
@@ -78,17 +89,19 @@ impl Interpreter {
             }
 
             // -------------------------
-            // Print statement
+            // Print
             // -------------------------
             Expr::Print { value } => {
-                let val = self.eval(value); // Evaluate whatever is inside
+                let val = self.eval(value);
+
                 match &val {
                     LiteralValue::Integer(n) => println!("{}", n),
                     LiteralValue::Double(f) => println!("{}", f),
                     LiteralValue::String(s) => println!("{}", s),
                     LiteralValue::Boolean(b) => println!("{}", b),
                 }
-                val // optionally return value
+
+                val
             }
         }
     }
@@ -102,31 +115,45 @@ impl Interpreter {
         }
     }
 
-    
-   fn apply_operator(op: &Operator, lhs: &LiteralValue, rhs: &LiteralValue) -> LiteralValue {
+    fn apply_operator(
+        op: &Operator,
+        lhs: &LiteralValue,
+        rhs: &LiteralValue,
+    ) -> LiteralValue {
         // ---------------------------------
-        // STRING CONCATENATION (highest priority)
+        // BOOLEAN OPERATIONS
+        // ---------------------------------
+        match (lhs, rhs) {
+            (LiteralValue::Boolean(a), LiteralValue::Boolean(b)) => {
+                match op {
+                    Operator::And => return LiteralValue::Boolean(*a && *b),
+                    Operator::Or  => return LiteralValue::Boolean(*a || *b),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
+        // ---------------------------------
+        // STRING CONCATENATION (Add only)
         // ---------------------------------
         if let Operator::Add = op {
             match (lhs, rhs) {
                 (LiteralValue::String(a), LiteralValue::String(b)) => {
                     return LiteralValue::String(format!("{}{}", a, b));
                 }
-
                 (LiteralValue::String(a), b) => {
                     return LiteralValue::String(format!("{}{}", a, Self::literal_to_string(b)));
                 }
-
                 (a, LiteralValue::String(b)) => {
                     return LiteralValue::String(format!("{}{}", Self::literal_to_string(a), b));
                 }
-
                 _ => {}
             }
         }
 
         // ---------------------------------
-        // PURE NUMERIC OPERATIONS
+        // NUMERIC OPERATIONS
         // ---------------------------------
         match (lhs, rhs) {
             (LiteralValue::Integer(a), LiteralValue::Integer(b)) => match op {
@@ -139,6 +166,7 @@ impl Interpreter {
                     }
                     LiteralValue::Integer(a / b)
                 }
+                _ => panic!("Invalid operator for integers"),
             },
 
             (LiteralValue::Double(a), LiteralValue::Double(b)) => match op {
@@ -151,6 +179,7 @@ impl Interpreter {
                     }
                     LiteralValue::Double(a / b)
                 }
+                _ => panic!("Invalid operator for doubles"),
             },
 
             // Mixed numeric → promote to double
@@ -159,6 +188,7 @@ impl Interpreter {
                 Operator::Subtract => LiteralValue::Double(*a as f64 - b),
                 Operator::Multiply => LiteralValue::Double(*a as f64 * b),
                 Operator::Divide => LiteralValue::Double(*a as f64 / b),
+                _ => panic!("Invalid operator for numeric types"),
             },
 
             (LiteralValue::Double(a), LiteralValue::Integer(b)) => match op {
@@ -166,11 +196,10 @@ impl Interpreter {
                 Operator::Subtract => LiteralValue::Double(a - *b as f64),
                 Operator::Multiply => LiteralValue::Double(a * *b as f64),
                 Operator::Divide => LiteralValue::Double(a / *b as f64),
+                _ => panic!("Invalid operator for numeric types"),
             },
 
             _ => panic!("Invalid operand types for operator {:?}", op),
         }
     }
-
-
 }
