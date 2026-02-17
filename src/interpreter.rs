@@ -50,6 +50,7 @@ impl Interpreter {
                 match (var_type, &val) {
                     (StaticType::Integer, LiteralValue::Integer(_))
                     | (StaticType::Double, LiteralValue::Double(_))
+                    | (StaticType::Boolean, LiteralValue::Boolean(_))
                     | (StaticType::String, LiteralValue::String(_)) => {}
                     _ => panic!(
                         "Type mismatch for variable '{}': declared {:?}, got {:?}",
@@ -85,6 +86,7 @@ impl Interpreter {
                     LiteralValue::Integer(n) => println!("{}", n),
                     LiteralValue::Double(f) => println!("{}", f),
                     LiteralValue::String(s) => println!("{}", s),
+                    LiteralValue::Boolean(b) => println!("{}", b),
                 }
                 val // optionally return value
             }
@@ -96,6 +98,7 @@ impl Interpreter {
             LiteralValue::Integer(n) => n.to_string(),
             LiteralValue::Double(f) => f.to_string(),
             LiteralValue::String(s) => s.clone(),
+            LiteralValue::Boolean(b) => b.to_string(),
         }
     }
 

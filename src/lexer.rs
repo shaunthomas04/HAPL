@@ -83,6 +83,14 @@ impl HaplToken {
             Some(integer_value.to_string()),
         )
     }
+    
+    fn boolean(boolean_value: bool) -> Self {
+        Self::new(
+            HaplTokenType::Literal(LiteralValue::Boolean(boolean_value)),
+            Some(boolean_value.to_string()),
+        )
+    }
+
     fn open_print() -> Self {
         Self::new(HaplTokenType::OpenPrint, Some("print".to_string()))
     }
@@ -137,6 +145,7 @@ impl HaplLexer {
                         "integer" => StaticType::Integer,
                         "double" => StaticType::Double,
                         "string" => StaticType::String,
+                        "boolean" => StaticType::Boolean,
                         other => panic!("Unknown variable type '{}'", other),
                     };
 
@@ -305,7 +314,7 @@ impl HaplLexer {
         let trimmed = text.trim();
 
         let class = class_type.expect(
-            "Static type required on <span>: expected 'integer', 'double', or 'string'",
+            "Static type required on <span>: expected 'integer', 'double', 'boolean' or 'string'",
         );
 
         match class {
@@ -326,8 +335,21 @@ impl HaplLexer {
                 }
                 // Strip the quotes
                 let inner = &trimmed[1..trimmed.len() - 1];
-                HaplToken::string(inner.to_string())
-            }            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', or 'string'", other),
+                HaplToken::string(inner.to_string()) 
+            }
+
+            "boolean" => {
+                match trimmed {
+                    "true" => HaplToken::boolean(true),
+                    "false" => HaplToken::boolean(false),
+                    _ => panic!(
+                        "Type error: value '{}' is not a valid boolean (expected true or false)",
+                        trimmed
+                    ),
+                }
+            }
+
+            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', 'boolean', or 'string'", other),
         }
     }
 }

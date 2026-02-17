@@ -42,6 +42,7 @@ pub enum LiteralValue {
     Integer(i64),
     Double(f64),
     String(String),
+    Boolean(bool)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,4 +50,5 @@ pub enum StaticType {
     Integer,
     Double,
     String,
+    Boolean
 }
