@@ -7,6 +7,9 @@ pub enum LexerTagType {
     Subtract,
     Multiply,
     Divide,
+    And,
+    Or,
+    Not
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +86,14 @@ impl HaplToken {
             Some(integer_value.to_string()),
         )
     }
+    
+    fn boolean(boolean_value: bool) -> Self {
+        Self::new(
+            HaplTokenType::Literal(LiteralValue::Boolean(boolean_value)),
+            Some(boolean_value.to_string()),
+        )
+    }
+
     fn open_print() -> Self {
         Self::new(HaplTokenType::OpenPrint, Some("print".to_string()))
     }
@@ -123,6 +134,18 @@ impl HaplLexer {
                     self.tokens.push(close_token);
                     return;
                 }
+                if ["&&", "||", "!"].contains(&class.as_str()) {
+                    let (open_token, close_token) = self.get_boolean_tags(class);
+
+                    self.tokens.push(open_token);
+
+                    for child in &tag.child_tags {
+                        self.walk(child);
+                    }
+
+                    self.tokens.push(close_token);
+                    return;
+                }
             }
         }
 
@@ -137,6 +160,7 @@ impl HaplLexer {
                         "integer" => StaticType::Integer,
                         "double" => StaticType::Double,
                         "string" => StaticType::String,
+                        "boolean" => StaticType::Boolean,
                         other => panic!("Unknown variable type '{}'", other),
                     };
 
@@ -301,11 +325,22 @@ impl HaplLexer {
         (HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type))
     }
 
+    fn get_boolean_tags(&self, logic_operator: &str) -> (HaplToken, HaplToken) {
+        let tag_type = match logic_operator {
+            "&&" => LexerTagType::And,
+            "||" => LexerTagType::Or,
+            "!" => LexerTagType::Not,
+            _ => panic!("Unknown operator: {}", logic_operator),
+        };
+
+        (HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type))
+    }
+
     fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
         let trimmed = text.trim();
 
         let class = class_type.expect(
-            "Static type required on <span>: expected 'integer', 'double', or 'string'",
+            "Static type required on <span>: expected 'integer', 'double', 'boolean' or 'string'",
         );
 
         match class {
@@ -326,8 +361,21 @@ impl HaplLexer {
                 }
                 // Strip the quotes
                 let inner = &trimmed[1..trimmed.len() - 1];
-                HaplToken::string(inner.to_string())
-            }            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', or 'string'", other),
+                HaplToken::string(inner.to_string()) 
+            }
+
+            "boolean" => {
+                match trimmed {
+                    "true" => HaplToken::boolean(true),
+                    "false" => HaplToken::boolean(false),
+                    _ => panic!(
+                        "Type error: value '{}' is not a valid boolean (expected true or false)",
+                        trimmed
+                    ),
+                }
+            }
+
+            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', 'boolean', or 'string'", other),
         }
     }
 }
@@ -338,5 +386,9 @@ fn operator_to_str(op: LexerTagType) -> &'static str {
         LexerTagType::Subtract => "-",
         LexerTagType::Multiply => "*",
         LexerTagType::Divide => "/",
+        LexerTagType::And => "&&",
+        LexerTagType::Or => "||",
+        LexerTagType::Not => "!",
+
     }
 }

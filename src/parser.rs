@@ -1,5 +1,5 @@
 use crate::lexer::{HaplToken, HaplTokenType, LexerTagType};
-use crate::ast::{Expr, Operator, StaticType};
+use crate::ast::{Expr, Operator, StaticType, LiteralValue};
 use std::collections::HashMap;
 
 pub struct HaplParser {
@@ -50,9 +50,19 @@ impl HaplParser {
 
                 self.advance(); // consume CloseOperator
 
-                if operands.len() < 2 {
-                    panic!("Operator requires at least 2 operands");
+                match operator {
+                    Operator::Not => {
+                        if operands.len() != 1 {
+                            panic!("'!' operator requires exactly 1 operand");
+                        }
+                    }
+                    _ => {
+                        if operands.len() < 2 {
+                            panic!("Operator requires at least 2 operands");
+                        }
+                    }
                 }
+
 
                 Expr::Operation { op: operator, operands }
             }
@@ -78,7 +88,28 @@ impl HaplParser {
                     panic!("Variable '{}' already declared", var_name);
                 }
 
+                // Insert into symbol table
                 self.symbol_table.insert(var_name.clone(), var_type_copy);
+
+                // Type-check **only literals** at parse time
+                match &*value_expr {
+                    Expr::Literal(lit_val) => {
+                        match (var_type_copy, lit_val) {
+                            (StaticType::Integer, LiteralValue::Integer(_))
+                            | (StaticType::Double, LiteralValue::Double(_))
+                            | (StaticType::String, LiteralValue::String(_))
+                            | (StaticType::Boolean, LiteralValue::Boolean(_)) => {}
+                            _ => panic!(
+                                "Type mismatch in variable '{}' declaration: expected {:?}, got {:?}",
+                                var_name, var_type_copy, lit_val
+                            ),
+                        }
+                    }
+                    _ => {
+                        // Allow non-literal expressions (arithmetic or variables) to be declared
+                        // Type will be checked at runtime during evaluation
+                    }
+                }
 
                 Expr::VariableDeclaration {
                     name: var_name,
@@ -229,6 +260,10 @@ impl HaplParser {
             LexerTagType::Subtract => Operator::Subtract,
             LexerTagType::Multiply => Operator::Multiply,
             LexerTagType::Divide => Operator::Divide,
+            LexerTagType::And => Operator::And,
+            LexerTagType::Or => Operator::Or,
+            LexerTagType::Not => Operator::Not,
+
         }
     }
 }
