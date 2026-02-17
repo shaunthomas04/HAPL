@@ -20,6 +20,8 @@ pub enum HaplTokenType {
     CloseVarDec { var_type: StaticType, name: String },
     OpenVarRef { name: String },
     CloseVarRef { name: String },
+    OpenPrint,
+    ClosePrint,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,13 @@ impl HaplToken {
             HaplTokenType::Literal(LiteralValue::Integer(integer_value)),
             Some(integer_value.to_string()),
         )
+    }
+    fn open_print() -> Self {
+        Self::new(HaplTokenType::OpenPrint, Some("print".to_string()))
+    }
+
+    fn close_print() -> Self {
+        Self::new(HaplTokenType::ClosePrint, Some("print".to_string()))
     }
 }
 
@@ -215,6 +224,21 @@ impl HaplLexer {
                 self.walk(child);
             }
         }
+
+        // -----------------------------------------
+        // Print <p> tag
+        // -----------------------------------------
+        if tag.tag_type == "p" {
+            self.tokens.push(HaplToken::open_print());
+
+            for child in &tag.child_tags {
+                self.walk(child);
+            }
+
+            self.tokens.push(HaplToken::close_print());
+            return;
+        }
+
     }
 
     pub fn print(&self) {
@@ -246,6 +270,12 @@ impl HaplLexer {
                 }
                 HaplTokenType::CloseVarRef { name } => {
                     println!("CloseVarRef({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenPrint => {
+                    println!("OpenPrint -> {:?}", token.value);
+                }
+                HaplTokenType::ClosePrint => {
+                    println!("ClosePrint -> {:?}", token.value);
                 }
             }
         }
@@ -287,8 +317,17 @@ impl HaplLexer {
                 .parse::<f64>()
                 .map(HaplToken::double)
                 .unwrap_or_else(|_| panic!("Type error: value '{}' is not a valid double", trimmed)),
-            "string" => HaplToken::string(trimmed.to_string()),
-            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', or 'string'", other),
+            "string" => {
+                if !trimmed.starts_with('"') || !trimmed.ends_with('"') {
+                    panic!(
+                        "String literals must be enclosed in double quotes (\") but got '{}'",
+                        trimmed
+                    );
+                }
+                // Strip the quotes
+                let inner = &trimmed[1..trimmed.len() - 1];
+                HaplToken::string(inner.to_string())
+            }            other => panic!("Unknown static type '{}'. Expected 'integer', 'double', or 'string'", other),
         }
     }
 }

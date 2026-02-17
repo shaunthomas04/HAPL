@@ -18,7 +18,7 @@ impl HaplParser {
     }
 
     // --------------------------------------------------
-    // Parse a SINGLE expression
+    // Parse a SINGLE expression (for operators / variables / literals)
     // --------------------------------------------------
     pub fn parse_expression(&mut self) -> Expr {
         if self.is_at_end() {
@@ -117,16 +117,53 @@ impl HaplParser {
     }
 
     // --------------------------------------------------
-    // Parse an entire program (ALL expressions)
+    // Parse a single top-level statement
+    // --------------------------------------------------
+    pub fn parse_statement(&mut self) -> Expr {
+        match self.current_token() {
+            // -------------------------
+            // Print statement
+            // -------------------------
+            HaplTokenType::OpenPrint { .. } => {
+                self.advance(); // consume <p>
+
+                // Parse the expression inside the print
+                let inner_expr = self.parse_expression();
+
+                // Ensure the print is properly closed
+                if self.is_at_end() || !matches!(self.current_token(), HaplTokenType::ClosePrint { .. }) {
+                    panic!("Print statement not properly closed with </p>");
+                }
+
+                self.advance(); // consume </p>
+                Expr::Print { value: Box::new(inner_expr) }
+            }
+
+            // Everything else: parse as expression
+            HaplTokenType::OpenVarDec { .. } 
+            | HaplTokenType::OpenOperator { .. }
+            | HaplTokenType::Literal(_)
+            | HaplTokenType::OpenVarRef { .. } => self.parse_expression(),
+
+            _ => panic!(
+                "Unexpected token {:?} at top-level position {}",
+                self.current_token(),
+                self.position
+            ),
+        }
+    }
+
+    // --------------------------------------------------
+    // Parse an entire program (ALL top-level statements)
     // --------------------------------------------------
     pub fn parse_program(&mut self) -> Vec<Expr> {
-        let mut expressions = Vec::new();
+        let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            expressions.push(self.parse_expression());
+            statements.push(self.parse_statement());
         }
 
-        expressions
+        statements
     }
 
     // --------------------------------------------------
