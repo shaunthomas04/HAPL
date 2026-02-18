@@ -1,5 +1,5 @@
 use crate::lexer::{HaplToken, HaplTokenType, LexerTagType};
-use crate::ast::{Expr, Operator, StaticType, LiteralValue};
+use crate::ast::{Expr, Operator, StaticType, LiteralValue, ConditionalBlock};
 use std::collections::HashMap;
 
 pub struct HaplParser {
@@ -62,7 +62,6 @@ impl HaplParser {
                         }
                     }
                 }
-
 
                 Expr::Operation { op: operator, operands }
             }
@@ -170,6 +169,11 @@ impl HaplParser {
                 Expr::Print { value: Box::new(inner_expr) }
             }
 
+            // -------------------------
+            // Conditional statement
+            // -------------------------
+            HaplTokenType::OpenConditional => self.parse_conditional(),
+
             // Everything else: parse as expression
             HaplTokenType::OpenVarDec { .. } 
             | HaplTokenType::OpenOperator { .. }
@@ -182,6 +186,72 @@ impl HaplParser {
                 self.position
             ),
         }
+    }
+
+    // --------------------------------------------------
+    // Parse a conditional statement
+    // --------------------------------------------------
+    fn parse_conditional(&mut self) -> Expr {
+        if !matches!(self.current_token(), HaplTokenType::OpenConditional) {
+            panic!("Expected <conditional> but found {:?}", self.current_token());
+        }
+
+        self.advance(); // consume OpenConditional
+
+        let mut if_blocks = Vec::new();
+        let mut else_block: Option<Vec<Expr>> = None;
+
+        while !matches!(self.current_token(), HaplTokenType::CloseConditional) {
+            match self.current_token() {
+                HaplTokenType::OpenIf => {
+                    if_blocks.push(self.parse_conditional_block(HaplTokenType::OpenIf, HaplTokenType::CloseIf));
+                }
+                HaplTokenType::OpenElif => {
+                    if_blocks.push(self.parse_conditional_block(HaplTokenType::OpenElif, HaplTokenType::CloseElif));
+                }
+                HaplTokenType::OpenElse => {
+                    else_block = Some(self.parse_else_block());
+                }
+                _ => panic!("Unexpected token inside conditional: {:?}", self.current_token()),
+            }
+        }
+
+        self.advance(); // consume CloseConditional
+
+        Expr::Conditional { if_blocks, else_block }
+    }
+
+    fn parse_conditional_block(&mut self, open: HaplTokenType, close: HaplTokenType) -> ConditionalBlock {
+        self.advance(); // consume OpenIf or OpenElif
+
+        let mut statements = Vec::new();
+        while !self.is_at_end() {
+            match self.current_token() {
+                // Check if we reached the closing token
+                HaplTokenType::CloseIf if matches!(close, HaplTokenType::CloseIf) => break,
+                HaplTokenType::CloseElif if matches!(close, HaplTokenType::CloseElif) => break,
+                _ => statements.push(self.parse_statement()),
+            }
+        }
+
+        self.advance(); // consume CloseIf or CloseElif
+
+        // First statement inside the block is the condition
+        let condition = statements.remove(0);
+
+        ConditionalBlock { condition, statements }
+    }
+
+    fn parse_else_block(&mut self) -> Vec<Expr> {
+        self.advance(); // consume OpenElse
+        let mut statements = Vec::new();
+
+        while !matches!(self.current_token(), HaplTokenType::CloseElse) {
+            statements.push(self.parse_statement());
+        }
+
+        self.advance(); // consume CloseElse
+        statements
     }
 
     // --------------------------------------------------
@@ -263,7 +333,6 @@ impl HaplParser {
             LexerTagType::And => Operator::And,
             LexerTagType::Or => Operator::Or,
             LexerTagType::Not => Operator::Not,
-
         }
     }
 }

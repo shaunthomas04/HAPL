@@ -1,4 +1,4 @@
-use crate::ast::{Expr, Operator, LiteralValue, StaticType};
+use crate::ast::{Expr, Operator, LiteralValue, StaticType, ConditionalBlock};
 use std::collections::HashMap;
 
 pub struct Interpreter {
@@ -102,6 +102,38 @@ impl Interpreter {
                 }
 
                 val
+            }
+
+            // -------------------------
+            // Conditional statements
+            // -------------------------
+            Expr::Conditional { if_blocks, else_block } => {
+                for block in if_blocks {
+                    let cond_value = self.eval(&block.condition);
+                    match cond_value {
+                        LiteralValue::Boolean(true) => {
+                            let mut last_val = LiteralValue::Boolean(true); // placeholder
+                            for stmt in &block.statements {
+                                last_val = self.eval(stmt);
+                            }
+                            return last_val; // Stop after first true condition
+                        }
+                        LiteralValue::Boolean(false) => continue,
+                        _ => panic!("Conditional expression must evaluate to a boolean"),
+                    }
+                }
+
+                // If no if/elif was true, execute else block if present
+                if let Some(stmts) = else_block {
+                    let mut last_val = LiteralValue::Boolean(true); // placeholder
+                    for stmt in stmts {
+                        last_val = self.eval(stmt);
+                    }
+                    return last_val;
+                }
+
+                // Default return if nothing executed
+                LiteralValue::Boolean(false)
             }
         }
     }
