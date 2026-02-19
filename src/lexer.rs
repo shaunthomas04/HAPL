@@ -9,7 +9,13 @@ pub enum LexerTagType {
     Divide,
     And,
     Or,
-    Not
+    Not,
+    Equal,
+    NotEqual,
+    Less,    
+    LessEqual,
+    Greater,  
+    GreaterEqual,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +31,14 @@ pub enum HaplTokenType {
     CloseVarRef { name: String },
     OpenPrint,
     ClosePrint,
+    OpenConditional,
+    CloseConditional,
+    OpenIf,
+    CloseIf,
+    OpenElif,
+    CloseElif,
+    OpenElse,
+    CloseElse,
 }
 
 #[derive(Debug, Clone)]
@@ -101,6 +115,31 @@ impl HaplToken {
     fn close_print() -> Self {
         Self::new(HaplTokenType::ClosePrint, Some("print".to_string()))
     }
+
+    pub fn open_conditional() -> Self {
+        Self::new(HaplTokenType::OpenConditional, Some("conditional".to_string()))
+    }
+    pub fn close_conditional() -> Self {
+        Self::new(HaplTokenType::CloseConditional, Some("conditional".to_string()))
+    }
+    pub fn open_if() -> Self {
+        Self::new(HaplTokenType::OpenIf, Some("if".to_string()))
+    }
+    pub fn close_if() -> Self {
+        Self::new(HaplTokenType::CloseIf, Some("if".to_string()))
+    }
+    pub fn open_elif() -> Self {
+        Self::new(HaplTokenType::OpenElif, Some("elif".to_string()))
+    }
+    pub fn close_elif() -> Self {
+        Self::new(HaplTokenType::CloseElif, Some("elif".to_string()))
+    }
+    pub fn open_else() -> Self {
+        Self::new(HaplTokenType::OpenElse, Some("else".to_string()))
+    }
+    pub fn close_else() -> Self {
+        Self::new(HaplTokenType::CloseElse, Some("else".to_string()))
+    }
 }
 
 pub struct HaplLexer {
@@ -144,6 +183,78 @@ impl HaplLexer {
                     }
 
                     self.tokens.push(close_token);
+                    return;
+                }
+
+                if [
+                        "equal",
+                        "not_equal",
+                        "less",
+                        "less_equal",
+                        "greater",
+                        "greater_equal"
+                    ].contains(&class.as_str()) {
+                    let (open_token, close_token) = self.get_comparison_tags(class);
+
+                    self.tokens.push(open_token);
+
+                    for child in &tag.child_tags {
+                        self.walk(child);
+                    }
+
+                    self.tokens.push(close_token);
+                    return;
+                }
+
+                // -----------------------------------------
+                // Conditionals <div class="conditional">
+                // -----------------------------------------
+                if class == "conditional" {
+                    self.tokens.push(HaplToken::open_conditional());
+                    for child in &tag.child_tags {
+                        match child.tag_type.as_str() {
+                            "div" => {
+                                if let Some(child_class) = &child.class {
+                                    match child_class.as_str() {
+                                        // -----------------------------------------
+                                        // If block <div class="if">
+                                        // -----------------------------------------
+                                        "if" => {
+                                            self.tokens.push(HaplToken::open_if());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_if());
+                                        }
+                                        // -----------------------------------------
+                                        // Elif <div class="elif">
+                                        // -----------------------------------------
+                                        "elif" => {
+                                            self.tokens.push(HaplToken::open_elif());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_elif());
+                                        }
+                                        // -----------------------------------------
+                                        // Else <div class="else">
+                                        // -----------------------------------------
+                                        "else" => {
+                                            self.tokens.push(HaplToken::open_else());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_else());
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    self.tokens.push(HaplToken::close_conditional());
                     return;
                 }
             }
@@ -301,6 +412,30 @@ impl HaplLexer {
                 HaplTokenType::ClosePrint => {
                     println!("ClosePrint -> {:?}", token.value);
                 }
+                HaplTokenType::OpenConditional => {
+                    println!("OpenConditional -> {:?}", token.value);
+                }
+                HaplTokenType::CloseConditional => {
+                    println!("CloseConditional -> {:?}", token.value);
+                }
+                HaplTokenType::OpenIf => {
+                    println!("OpenIf -> {:?}", token.value);
+                }
+                HaplTokenType::CloseIf => {
+                    println!("CloseIf -> {:?}", token.value);
+                }
+                HaplTokenType::OpenElif => {
+                    println!("OpenElif -> {:?}", token.value);
+                }
+                HaplTokenType::CloseElif => {
+                    println!("CloseElif -> {:?}", token.value);
+                }
+                HaplTokenType::OpenElse => {
+                    println!("OpenElse -> {:?}", token.value);
+                }
+                HaplTokenType::CloseElse => {
+                    println!("CloseElse -> {:?}", token.value);
+                }
             }
         }
     }
@@ -335,6 +470,24 @@ impl HaplLexer {
 
         (HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type))
     }
+
+    fn get_comparison_tags(&self, operator: &str) -> (HaplToken, HaplToken) {
+        let tag_type = match operator {
+            "equal" => LexerTagType::Equal,
+            "not_equal" => LexerTagType::NotEqual,
+            "less" => LexerTagType::Less,
+            "less_equal" => LexerTagType::LessEqual,
+            "greater" => LexerTagType::Greater,
+            "greater_equal" => LexerTagType::GreaterEqual,
+            _ => panic!("Unknown comparison operator: {}", operator),
+        };
+
+        (
+            HaplToken::open_operator(tag_type),
+            HaplToken::close_operator(tag_type),
+        )
+    }
+
 
     fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
         let trimmed = text.trim();
@@ -389,6 +542,11 @@ fn operator_to_str(op: LexerTagType) -> &'static str {
         LexerTagType::And => "&&",
         LexerTagType::Or => "||",
         LexerTagType::Not => "!",
-
+        LexerTagType::Equal => "==",
+        LexerTagType::NotEqual => "!=",
+        LexerTagType::Less => "<",
+        LexerTagType::LessEqual => "<=",
+        LexerTagType::Greater => ">",
+        LexerTagType::GreaterEqual => ">=",
     }
 }

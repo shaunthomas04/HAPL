@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HAPL Conditional Demo</title>
+</head>
+
+<body>
+
+    <!-- ============================= -->
+    <!-- Equal bools -->
+    <!-- ============================= -->
+    <p>
+         <div class="equal">
+            <span class="boolean">false</span>
+            <span class="boolean">false</span>
+        </div>
+    </p>
+
+    <!-- ============================= -->
+    <!-- Equal bools -->
+    <!-- ============================= -->
+    <p>
+         <div class="not_equal">
+            <span class="integer">1</span>
+            <span class="integer">1</span>
+        </div>
+    </p>
+
+    <p>
+         <div class="greater_equal">
+             <span class="double">1.0</span>
+             <span class="integer">1</span>
+        </div>
+    </p>
+
+
+    <!-- trying to incorporate both logical operators and condtionals with three types -->
+    <p>
+        <div class="not_equal">
+            <span class="boolean">false</span>
+            <div class="&&">
+                <div class="greater_equal">
+                    <span class="double">1.0</span>
+                    <span class="integer">1</span>
+                </div>    
+                <span class="boolean">false</span>
+            </div>  
+        </div>
+    </p>
+
+
+
+
+
+</body>
+</html>

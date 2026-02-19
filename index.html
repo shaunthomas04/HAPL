@@ -2,127 +2,43 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>HAPL Full Feature Demo</title>
+    <title>HAPL Conditional Demo</title>
 </head>
 
 <body>
 
     <!-- ============================= -->
-    <!-- LITERALS -->
+    <!-- CONDITIONAL EXAMPLE -->
     <!-- ============================= -->
 
-    <p><span class="integer">42</span></p>
-    <p><span class="double">3.14</span></p>
-    <p><span class="string">"Hello HAPL"</span></p>
-    <p><span class="boolean">true</span></p>
-    <p><span class="boolean">false</span></p>
+    <div class="conditional">
 
-
-    <!-- ============================= -->
-    <!-- VARIABLE DECLARATIONS -->
-    <!-- ============================= -->
-
-    <var class="integer" id="a">
-        <div class="+">
-            <span class="integer">7</span>
-            <span class="integer">8</span>
-        </div>
-    </var>
-
-    <var class="double" id="b">
-        <span class="double">2.5</span>
-    </var>
-
-    <var class="string" id="greeting">
-        <span class="string">"Hello"</span>
-    </var>
-
-    <var class="boolean" id="flag">
-        
-        <div class="!">
-            <div class="||">
-                <div class="&&">
-                    <span class="boolean">true</span>
-                    <span class="boolean">true</span>
-                    <span class="boolean">false</span>
-                    <span class="boolean">true</span>
-                </div>
-                
-                <div class="||">
-                    <span class="boolean">true</span>
-                    <span class="boolean">true</span>
-                    <span class="boolean">false</span>
-                    <span class="boolean">true</span>
-                </div>
-            </div>
-        </div>
-            
-
-        
-    </var>
-        
-        
-        <!-- ============================= -->
-    <!-- VARIABLE REFERENCES -->
-    <!-- ============================= -->
-
-    <p><var class="a"></var></p>
-    <p><var class="b"></var></p>
-    <p><var class="greeting"></var></p>
-    <p><var class="flag"></var></p>
-
-
-    <!-- ============================= -->
-    <!-- ARITHMETIC OPERATIONS -->
-    <!-- ============================= -->
-
-    <!-- Mixed numeric promotion -->
-    <p>
-        <div class="+">
-            <span class="integer">5</span>
-            <span class="double">2.5</span>
-        </div>
-    </p>
-
-
-    <!-- ============================= -->
-    <!-- STRING CONCATENATION -->
-    <!-- ============================= -->
-
-    <p>
-        <div class="+">
-            <var class="greeting"></var>
-            <span class="string">" World!"</span>
-        </div>
-    </p>
-
-
-    <!-- ============================= -->
-    <!-- BOOLEAN OPERATIONS -->
-    <!-- ============================= -->
-
-    <!-- AND -->
-    <p>
-        <div class="&&">
-            <span class="boolean">true</span>
+        <!-- IF block -->
+        <div class="if">
+            <!-- Condition -->
             <span class="boolean">false</span>
-        </div>
-    </p>
 
-    <!-- NOT -->
-    <p>
-        <div class="!">
+            <!-- Statements -->
+            <p><span class="string">"Hello world from if haha"</span></p>
+        </div>
+
+        <!-- ELIF block -->
+        <div class="elif">
+            <!-- Condition -->
             <span class="boolean">false</span>
-        </div>
-    </p>
 
-    <!-- Boolean using variable -->
-    <p>
-        <div class="&&">
-            <var class="flag"></var>
-            <span class="boolean">true</span>
+            <!-- Statements -->
+            <p><span class="string">"Hello from the else if statement"</span></p>
         </div>
-    </p>
+
+        <!-- ELSE block -->
+        <div class="else">
+            <p><span class="string">"Everything else was false to get here"</span></p>
+        </div>
+
+    </div>
+
 
 </body>
 </html>
+

@@ -1,5 +1,3 @@
-// ast.rs
-
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Literal value
@@ -27,17 +25,41 @@ pub enum Expr {
 
     /// Print Operation
     Print { value: Box<Expr> },
+
+    /// Conditional (if / elif / else)
+    Conditional {
+        if_blocks: Vec<ConditionalBlock>, // first one is the "if", rest are "elif"
+        else_block: Option<Vec<Expr>>,    // optional else statements
+    },
+}
+
+/// Represents a single `if` or `elif` block
+#[derive(Debug, Clone)]
+pub struct ConditionalBlock {
+    pub condition: Expr,      // boolean expression
+    pub statements: Vec<Expr>, // statements to execute if true
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum Operator {
+    //arithmetic
     Add,
     Subtract,
     Multiply,
     Divide,
+    
+    //logical
     Or,
     And,
-    Not
+    Not,
+
+    // Comparison
+    Equal,          // ==
+    NotEqual,       // !=
+    Less,           // <
+    LessEqual,      // <=
+    Greater,        // >
+    GreaterEqual,   // >=
 }
 
 #[derive(Debug, Clone)]

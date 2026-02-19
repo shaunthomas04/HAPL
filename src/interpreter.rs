@@ -1,4 +1,4 @@
-use crate::ast::{Expr, Operator, LiteralValue, StaticType};
+use crate::ast::{Expr, Operator, LiteralValue, StaticType, ConditionalBlock};
 use std::collections::HashMap;
 
 pub struct Interpreter {
@@ -103,6 +103,38 @@ impl Interpreter {
 
                 val
             }
+
+            // -------------------------
+            // Conditional statements
+            // -------------------------
+            Expr::Conditional { if_blocks, else_block } => {
+                for block in if_blocks {
+                    let cond_value = self.eval(&block.condition);
+                    match cond_value {
+                        LiteralValue::Boolean(true) => {
+                            let mut last_val = LiteralValue::Boolean(true); // placeholder
+                            for stmt in &block.statements {
+                                last_val = self.eval(stmt);
+                            }
+                            return last_val; // Stop after first true condition
+                        }
+                        LiteralValue::Boolean(false) => continue,
+                        _ => panic!("Conditional expression must evaluate to a boolean"),
+                    }
+                }
+
+                // If no if/elif was true, execute else block if present
+                if let Some(stmts) = else_block {
+                    let mut last_val = LiteralValue::Boolean(true); // placeholder
+                    for stmt in stmts {
+                        last_val = self.eval(stmt);
+                    }
+                    return last_val;
+                }
+
+                // Default return if nothing executed
+                LiteralValue::Boolean(false)
+            }
         }
     }
 
@@ -128,6 +160,10 @@ impl Interpreter {
                 match op {
                     Operator::And => return LiteralValue::Boolean(*a && *b),
                     Operator::Or  => return LiteralValue::Boolean(*a || *b),
+
+                    Operator::Equal => return LiteralValue::Boolean(a == b),
+                    Operator::NotEqual => return LiteralValue::Boolean(a != b),
+
                     _ => {}
                 }
             }
@@ -153,6 +189,18 @@ impl Interpreter {
         }
 
         // ---------------------------------
+        // STRING COMPARISON
+        // ---------------------------------
+        match (lhs, rhs) {
+            (LiteralValue::String(a), LiteralValue::String(b)) => match op {
+                Operator::Equal => return LiteralValue::Boolean(a == b),
+                Operator::NotEqual => return LiteralValue::Boolean(a != b),
+                _ => {}
+            },
+            _ => {}
+        }
+
+        // ---------------------------------
         // NUMERIC OPERATIONS
         // ---------------------------------
         match (lhs, rhs) {
@@ -166,6 +214,13 @@ impl Interpreter {
                     }
                     LiteralValue::Integer(a / b)
                 }
+                Operator::Equal => LiteralValue::Boolean(a == b),
+                Operator::NotEqual => LiteralValue::Boolean(a != b),
+                Operator::Less => LiteralValue::Boolean(a < b),
+                Operator::LessEqual => LiteralValue::Boolean(a <= b),
+                Operator::Greater => LiteralValue::Boolean(a > b),
+                Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+
                 _ => panic!("Invalid operator for integers"),
             },
 
@@ -179,6 +234,13 @@ impl Interpreter {
                     }
                     LiteralValue::Double(a / b)
                 }
+                Operator::Equal => LiteralValue::Boolean(a == b),
+                Operator::NotEqual => LiteralValue::Boolean(a != b),
+                Operator::Less => LiteralValue::Boolean(a < b),
+                Operator::LessEqual => LiteralValue::Boolean(a <= b),
+                Operator::Greater => LiteralValue::Boolean(a > b),
+                Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+
                 _ => panic!("Invalid operator for doubles"),
             },
 
@@ -188,6 +250,12 @@ impl Interpreter {
                 Operator::Subtract => LiteralValue::Double(*a as f64 - b),
                 Operator::Multiply => LiteralValue::Double(*a as f64 * b),
                 Operator::Divide => LiteralValue::Double(*a as f64 / b),
+                Operator::Equal => LiteralValue::Boolean((*a as f64) == *b),
+                Operator::NotEqual => LiteralValue::Boolean((*a as f64) != *b),
+                Operator::Less => LiteralValue::Boolean((*a as f64) < *b),
+                Operator::LessEqual => LiteralValue::Boolean((*a as f64) <= *b),
+                Operator::Greater => LiteralValue::Boolean((*a as f64) > *b),
+                Operator::GreaterEqual => LiteralValue::Boolean((*a as f64) >= *b),
                 _ => panic!("Invalid operator for numeric types"),
             },
 
@@ -196,6 +264,12 @@ impl Interpreter {
                 Operator::Subtract => LiteralValue::Double(a - *b as f64),
                 Operator::Multiply => LiteralValue::Double(a * *b as f64),
                 Operator::Divide => LiteralValue::Double(a / *b as f64),
+                Operator::Equal => LiteralValue::Boolean((*b as f64) == *a),
+                Operator::NotEqual => LiteralValue::Boolean((*b as f64) != *a),
+                Operator::Less => LiteralValue::Boolean((*b as f64) < *a),
+                Operator::LessEqual => LiteralValue::Boolean((*b as f64) <= *a),
+                Operator::Greater => LiteralValue::Boolean((*b as f64) > *a),
+                Operator::GreaterEqual => LiteralValue::Boolean((*b as f64) >= *a),
                 _ => panic!("Invalid operator for numeric types"),
             },
 
