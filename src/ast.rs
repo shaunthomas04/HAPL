@@ -42,13 +42,24 @@ pub struct ConditionalBlock {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Operator {
+    //arithmetic
     Add,
     Subtract,
     Multiply,
     Divide,
+    
+    //logical
     Or,
     And,
-    Not
+    Not,
+
+    // Comparison
+    Equal,          // ==
+    NotEqual,       // !=
+    Less,           // <
+    LessEqual,      // <=
+    Greater,        // >
+    GreaterEqual,   // >=
 }
 
 #[derive(Debug, Clone)]

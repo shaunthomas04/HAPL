@@ -53,9 +53,21 @@ impl HaplParser {
                 match operator {
                     Operator::Not => {
                         if operands.len() != 1 {
-                            panic!("'!' operator requires exactly 1 operand");
+                            panic!("'not' operator requires exactly 1 operand");
                         }
                     }
+
+                    Operator::Equal
+                    | Operator::NotEqual
+                    | Operator::Less
+                    | Operator::LessEqual
+                    | Operator::Greater
+                    | Operator::GreaterEqual => {
+                        if operands.len() != 2 {
+                            panic!("Comparison operators require exactly 2 operands");
+                        }
+                    }
+
                     _ => {
                         if operands.len() < 2 {
                             panic!("Operator requires at least 2 operands");
@@ -333,6 +345,12 @@ impl HaplParser {
             LexerTagType::And => Operator::And,
             LexerTagType::Or => Operator::Or,
             LexerTagType::Not => Operator::Not,
+            LexerTagType::Equal => Operator::Equal,
+            LexerTagType::NotEqual => Operator::NotEqual,
+            LexerTagType::Less => Operator::Less,
+            LexerTagType::LessEqual => Operator::LessEqual,
+            LexerTagType::Greater => Operator::Greater,
+            LexerTagType::GreaterEqual => Operator::GreaterEqual,
         }
     }
 }

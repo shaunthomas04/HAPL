@@ -9,7 +9,13 @@ pub enum LexerTagType {
     Divide,
     And,
     Or,
-    Not
+    Not,
+    Equal,
+    NotEqual,
+    Less,    
+    LessEqual,
+    Greater,  
+    GreaterEqual,
 }
 
 #[derive(Debug, Clone)]
@@ -180,6 +186,25 @@ impl HaplLexer {
                     return;
                 }
 
+                if [
+                        "equal",
+                        "not_equal",
+                        "less",
+                        "less_equal",
+                        "greater",
+                        "greater_equal"
+                    ].contains(&class.as_str()) {
+                    let (open_token, close_token) = self.get_comparison_tags(class);
+
+                    self.tokens.push(open_token);
+
+                    for child in &tag.child_tags {
+                        self.walk(child);
+                    }
+
+                    self.tokens.push(close_token);
+                    return;
+                }
 
                 // -----------------------------------------
                 // Conditionals <div class="conditional">
@@ -446,6 +471,24 @@ impl HaplLexer {
         (HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type))
     }
 
+    fn get_comparison_tags(&self, operator: &str) -> (HaplToken, HaplToken) {
+        let tag_type = match operator {
+            "equal" => LexerTagType::Equal,
+            "not_equal" => LexerTagType::NotEqual,
+            "less" => LexerTagType::Less,
+            "less_equal" => LexerTagType::LessEqual,
+            "greater" => LexerTagType::Greater,
+            "greater_equal" => LexerTagType::GreaterEqual,
+            _ => panic!("Unknown comparison operator: {}", operator),
+        };
+
+        (
+            HaplToken::open_operator(tag_type),
+            HaplToken::close_operator(tag_type),
+        )
+    }
+
+
     fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
         let trimmed = text.trim();
 
@@ -499,6 +542,11 @@ fn operator_to_str(op: LexerTagType) -> &'static str {
         LexerTagType::And => "&&",
         LexerTagType::Or => "||",
         LexerTagType::Not => "!",
-
+        LexerTagType::Equal => "==",
+        LexerTagType::NotEqual => "!=",
+        LexerTagType::Less => "<",
+        LexerTagType::LessEqual => "<=",
+        LexerTagType::Greater => ">",
+        LexerTagType::GreaterEqual => ">=",
     }
 }

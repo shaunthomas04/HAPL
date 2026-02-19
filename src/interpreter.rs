@@ -160,6 +160,10 @@ impl Interpreter {
                 match op {
                     Operator::And => return LiteralValue::Boolean(*a && *b),
                     Operator::Or  => return LiteralValue::Boolean(*a || *b),
+
+                    Operator::Equal => return LiteralValue::Boolean(a == b),
+                    Operator::NotEqual => return LiteralValue::Boolean(a != b),
+
                     _ => {}
                 }
             }
@@ -185,6 +189,18 @@ impl Interpreter {
         }
 
         // ---------------------------------
+        // STRING COMPARISON
+        // ---------------------------------
+        match (lhs, rhs) {
+            (LiteralValue::String(a), LiteralValue::String(b)) => match op {
+                Operator::Equal => return LiteralValue::Boolean(a == b),
+                Operator::NotEqual => return LiteralValue::Boolean(a != b),
+                _ => {}
+            },
+            _ => {}
+        }
+
+        // ---------------------------------
         // NUMERIC OPERATIONS
         // ---------------------------------
         match (lhs, rhs) {
@@ -198,6 +214,13 @@ impl Interpreter {
                     }
                     LiteralValue::Integer(a / b)
                 }
+                Operator::Equal => LiteralValue::Boolean(a == b),
+                Operator::NotEqual => LiteralValue::Boolean(a != b),
+                Operator::Less => LiteralValue::Boolean(a < b),
+                Operator::LessEqual => LiteralValue::Boolean(a <= b),
+                Operator::Greater => LiteralValue::Boolean(a > b),
+                Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+
                 _ => panic!("Invalid operator for integers"),
             },
 
@@ -211,6 +234,13 @@ impl Interpreter {
                     }
                     LiteralValue::Double(a / b)
                 }
+                Operator::Equal => LiteralValue::Boolean(a == b),
+                Operator::NotEqual => LiteralValue::Boolean(a != b),
+                Operator::Less => LiteralValue::Boolean(a < b),
+                Operator::LessEqual => LiteralValue::Boolean(a <= b),
+                Operator::Greater => LiteralValue::Boolean(a > b),
+                Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+
                 _ => panic!("Invalid operator for doubles"),
             },
 
@@ -220,6 +250,12 @@ impl Interpreter {
                 Operator::Subtract => LiteralValue::Double(*a as f64 - b),
                 Operator::Multiply => LiteralValue::Double(*a as f64 * b),
                 Operator::Divide => LiteralValue::Double(*a as f64 / b),
+                Operator::Equal => LiteralValue::Boolean((*a as f64) == *b),
+                Operator::NotEqual => LiteralValue::Boolean((*a as f64) != *b),
+                Operator::Less => LiteralValue::Boolean((*a as f64) < *b),
+                Operator::LessEqual => LiteralValue::Boolean((*a as f64) <= *b),
+                Operator::Greater => LiteralValue::Boolean((*a as f64) > *b),
+                Operator::GreaterEqual => LiteralValue::Boolean((*a as f64) >= *b),
                 _ => panic!("Invalid operator for numeric types"),
             },
 
@@ -228,6 +264,12 @@ impl Interpreter {
                 Operator::Subtract => LiteralValue::Double(a - *b as f64),
                 Operator::Multiply => LiteralValue::Double(a * *b as f64),
                 Operator::Divide => LiteralValue::Double(a / *b as f64),
+                Operator::Equal => LiteralValue::Boolean((*b as f64) == *a),
+                Operator::NotEqual => LiteralValue::Boolean((*b as f64) != *a),
+                Operator::Less => LiteralValue::Boolean((*b as f64) < *a),
+                Operator::LessEqual => LiteralValue::Boolean((*b as f64) <= *a),
+                Operator::Greater => LiteralValue::Boolean((*b as f64) > *a),
+                Operator::GreaterEqual => LiteralValue::Boolean((*b as f64) >= *a),
                 _ => panic!("Invalid operator for numeric types"),
             },
 
