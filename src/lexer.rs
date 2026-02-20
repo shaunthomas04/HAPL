@@ -263,6 +263,20 @@ impl HaplLexer {
         }
 
         // -----------------------------------------
+        // Print <p> tag
+        // -----------------------------------------
+        if tag.tag_type == "p" {
+            self.tokens.push(HaplToken::open_print());
+
+            for child in &tag.child_tags {
+                self.walk(child);
+            }
+
+            self.tokens.push(HaplToken::close_print());
+            return;
+        }
+
+        // -----------------------------------------
         // Variable tags <var>
         // -----------------------------------------
         if tag.tag_type == "var" {
@@ -376,20 +390,6 @@ impl HaplLexer {
             for child in &tag.child_tags {
                 self.walk(child);
             }
-        }
-
-        // -----------------------------------------
-        // Print <p> tag
-        // -----------------------------------------
-        if tag.tag_type == "p" {
-            self.tokens.push(HaplToken::open_print());
-
-            for child in &tag.child_tags {
-                self.walk(child);
-            }
-
-            self.tokens.push(HaplToken::close_print());
-            return;
         }
 
     }
