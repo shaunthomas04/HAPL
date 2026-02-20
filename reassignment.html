@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HAPL Integer Variable Demo</title>
+</head>
+
+<body>
+
+    <!-- ============================= -->
+    <!-- INTEGER VARIABLE EXAMPLE -->
+    <!-- ============================= -->
+
+    <!-- Declare integer variable x = 10 -->
+    <var class="integer" id="x">
+        <span class="integer">10</span>
+    </var>
+
+    <!-- Print the current value of x -->
+    <p>
+        <var class="x"></var>
+    </p>
+
+    <!-- Update x with arithmetic operation: x = x + 5 -->
+
+    <var class="x">
+        <div class="+">
+            <span class="integer">25</span>
+            <span class="integer">5</span>
+        </div>
+    </var>
+
+    <!-- Print the updated value of x -->
+    <p>
+        <var class="x"></var>
+    </p>
+
+</body>
+</html>

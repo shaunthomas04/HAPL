@@ -37,7 +37,7 @@ fn main() {
     }
 
     // println!("--- TOKENS ---");
-    // lexer.print();
+    lexer.print();
 
     let tokens = lexer
     .tokens()
