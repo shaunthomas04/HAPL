@@ -79,6 +79,36 @@ impl Interpreter {
             }
 
             // -------------------------
+            // Variable assignment
+            // -------------------------
+            Expr::Assignment { name, value } => {
+                // Evaluate the expression first
+                let val = self.eval(value);
+
+                // Get expected type from symbol table
+                let expected_type = self
+                    .runtime_symbol_table
+                    .get(name)
+                    .map(|v| Self::expr_type(v))
+                    .unwrap_or_else(|| panic!("Variable '{}' assigned before declaration", name));
+
+                // Get actual type
+                let value_type = Self::expr_type(&val);
+
+                if expected_type != value_type {
+                    panic!(
+                        "Type mismatch in assignment to '{}': expected {:?}, got {:?}",
+                        name, expected_type, value_type
+                    );
+                }
+
+                // Update variable in runtime symbol table
+                self.runtime_symbol_table.insert(name.clone(), val.clone());
+
+                val
+            }
+            
+            // -------------------------
             // Variable reference
             // -------------------------
             Expr::VariableReference { name } => {
@@ -274,6 +304,16 @@ impl Interpreter {
             },
 
             _ => panic!("Invalid operand types for operator {:?}", op),
+        }
+    }
+
+    // Helper: get the static type of a LiteralValue
+    fn expr_type(val: &LiteralValue) -> StaticType {
+        match val {
+            LiteralValue::Integer(_) => StaticType::Integer,
+            LiteralValue::Double(_) => StaticType::Double,
+            LiteralValue::String(_) => StaticType::String,
+            LiteralValue::Boolean(_) => StaticType::Boolean,
         }
     }
 }

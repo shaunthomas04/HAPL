@@ -29,6 +29,8 @@ pub enum HaplTokenType {
     CloseVarDec { var_type: StaticType, name: String },
     OpenVarRef { name: String },
     CloseVarRef { name: String },
+    OpenVarAssign { name: String },
+    CloseVarAssign { name: String },
     OpenPrint,
     ClosePrint,
     OpenConditional,
@@ -296,20 +298,36 @@ impl HaplLexer {
                     ));
                     return;
                 } else {
-                    // Variable reference: <var class="x"></var>
-                    self.tokens.push(HaplToken::new(
-                        HaplTokenType::OpenVarRef { name: class.clone() },
-                        Some(class.clone()),
-                    ));
+                    if tag.child_tags.is_empty(){
+                        // Variable reference: <var class="x"></var>
+                        self.tokens.push(HaplToken::new(
+                            HaplTokenType::OpenVarRef { name: class.clone() },
+                            Some(class.clone()),
+                        ));
 
-                    for child in &tag.child_tags {
-                        self.walk(child);
+                        self.tokens.push(HaplToken::new(
+                            HaplTokenType::CloseVarRef { name: class.clone() },
+                            Some(class.clone()),
+                        ));
+                    } else {
+                        // ----------------------------
+                        // Variable Assignment
+                        // ----------------------------
+                        self.tokens.push(HaplToken::new(
+                            HaplTokenType::OpenVarAssign { name: class.clone() },
+                            Some(class.clone()),
+                        ));
+
+                        for child in &tag.child_tags {
+                            self.walk(child);
+                        }
+
+                        self.tokens.push(HaplToken::new(
+                            HaplTokenType::CloseVarAssign { name: class.clone() },
+                            Some(class.clone()),
+                        ));
                     }
 
-                    self.tokens.push(HaplToken::new(
-                        HaplTokenType::CloseVarRef { name: class.clone() },
-                        Some(class.clone()),
-                    ));
                     return;
                 }
             } else {
@@ -405,6 +423,12 @@ impl HaplLexer {
                 }
                 HaplTokenType::CloseVarRef { name } => {
                     println!("CloseVarRef({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenVarAssign { name } => {
+                    println!("OpenVarAssign({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::CloseVarAssign { name } => {
+                    println!("CloseVarAssign({}) -> {:?}", name, token.value);
                 }
                 HaplTokenType::OpenPrint => {
                     println!("OpenPrint -> {:?}", token.value);

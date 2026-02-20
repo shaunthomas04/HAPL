@@ -31,6 +31,13 @@ pub enum Expr {
         if_blocks: Vec<ConditionalBlock>, // first one is the "if", rest are "elif"
         else_block: Option<Vec<Expr>>,    // optional else statements
     },
+
+    /// Variable reassignment:
+    /// <set id="x">...</set>
+    Assignment {
+        name: String,
+        value: Box<Expr>
+    }
 }
 
 /// Represents a single `if` or `elif` block

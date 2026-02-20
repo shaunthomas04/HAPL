@@ -150,6 +150,54 @@ impl HaplParser {
                 Expr::VariableReference { name: var_name }
             }
 
+           
+            // -------------------------
+            // Variable Assignment
+            // -------------------------
+            HaplTokenType::OpenVarAssign { name } => {
+                let var_name = name.clone();
+
+                self.advance(); // consume OpenVarAssign
+
+                // Variable must already exist
+                let expected_type = match self.symbol_table.get(&var_name) {
+                    Some(t) => *t,
+                    None => panic!("Variable '{}' assigned before declaration", var_name),
+                };
+
+                let value_expr = Box::new(self.parse_expression());
+
+                // If literal, check immediately
+                if let Expr::Literal(lit_val) = &*value_expr {
+                    match (expected_type, lit_val) {
+                        (StaticType::Integer, LiteralValue::Integer(_))
+                        | (StaticType::Double, LiteralValue::Double(_))
+                        | (StaticType::String, LiteralValue::String(_))
+                        | (StaticType::Boolean, LiteralValue::Boolean(_)) => {}
+                        _ => panic!(
+                            "Type mismatch in assignment to '{}': expected {:?}, got {:?}",
+                            var_name, expected_type, lit_val
+                        ),
+                    }
+                }
+
+                let value_expr = Box::new(self.parse_expression());
+
+                if self.is_at_end() || !matches!(
+                    self.current_token(),
+                    HaplTokenType::CloseVarAssign { name: ref n } if n == &var_name
+                ) {
+                    panic!("Variable '{}' assignment not properly closed", var_name);
+                }
+
+                self.advance(); // consume CloseVarAssign
+
+                Expr::Assignment {
+                    name: var_name,
+                    value: value_expr,
+                }
+            }
+
             _ => panic!(
                 "Unexpected token {:?} at position {}",
                 self.current_token(),
@@ -190,7 +238,8 @@ impl HaplParser {
             HaplTokenType::OpenVarDec { .. } 
             | HaplTokenType::OpenOperator { .. }
             | HaplTokenType::Literal(_)
-            | HaplTokenType::OpenVarRef { .. } => self.parse_expression(),
+            | HaplTokenType::OpenVarRef { .. }
+            | HaplTokenType::OpenVarAssign { .. } => self.parse_expression(),
 
             _ => panic!(
                 "Unexpected token {:?} at top-level position {}",
