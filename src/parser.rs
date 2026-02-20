@@ -181,7 +181,7 @@ impl HaplParser {
                     }
                 }
 
-                let value_expr = Box::new(self.parse_expression());
+                // let value_expr = Box::new(self.parse_expression());
 
                 if self.is_at_end() || !matches!(
                     self.current_token(),
