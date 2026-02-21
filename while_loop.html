@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HAPL Conditional Demo</title>
+</head>
+
+<body>
+
+   <!-- Variable declaration -->
+    <var class="integer" id="x">
+        <span class="integer">1</span>
+    </var>
+
+    <var class="integer" id="y">
+        <var class="x"></var>
+    </var>
+
+    <!-- While loop -->
+    <div class="while">
+        <div class="condition">
+            <div class="greater_equal">
+                <span class="integer">5</span>
+                <var class="x"></var>
+            </div>
+        </div>
+
+        <div class="body">
+            <p>
+                <var class="x"></var>
+            </p>
+
+            <var class="y">
+                <var class="x"></var>
+            </var>
+
+           <var class="x">
+                <div class="+">
+                    <var class="y"></var>
+                    <span class="integer">1</span>
+                </div>
+            </var>
+        </div>
+    </div>
+
+
+
+</body>
+</html>
