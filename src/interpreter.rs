@@ -187,6 +187,51 @@ impl Interpreter {
                 }
                 last_val
             }
+
+            // -------------------------
+            // For loop
+            // -------------------------
+            Expr::ForLoop {
+                iterator,
+                initializer,
+                condition,
+                increment,
+                body,
+            } => {
+                let mut last_val = LiteralValue::Boolean(false);
+
+                // Initialize iterator variable if provided
+                if let Some(init_expr) = initializer {
+                    let val = self.eval(init_expr);
+                    self.runtime_symbol_table.insert(iterator.clone(), val);
+                } else if !self.runtime_symbol_table.contains_key(iterator) {
+                    // Default to 0 if no initializer and iterator doesn't exist yet
+                    self.runtime_symbol_table.insert(iterator.clone(), LiteralValue::Integer(0));
+                }
+
+                // Loop while condition is true
+                loop {
+                    let cond_val = self.eval(condition);
+                    match cond_val {
+                        LiteralValue::Boolean(true) => {
+                            // Execute body
+                            for stmt in body {
+                                last_val = self.eval(stmt);
+                            }
+
+                            // Apply increment if present
+                            if let Some(inc_expr) = increment {
+                                let val = self.eval(inc_expr);
+                                self.runtime_symbol_table.insert(iterator.clone(), val);
+                            }
+                        }
+                        LiteralValue::Boolean(false) => break,
+                        _ => panic!("For loop condition must evaluate to a boolean"),
+                    }
+                }
+
+                last_val
+            }
         }
     }
 

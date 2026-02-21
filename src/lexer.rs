@@ -41,18 +41,14 @@ pub enum HaplTokenType {
     CloseElif,
     OpenElse,
     CloseElse,
-    // OpenWhile,
-    // CloseWhile,
-    // OpenWhileCondition,
-    // CloseWhileCondition,
-    // OpenWhileBody,
-    // CloseWhileBody,
     OpenLoop { loop_type: LoopType },
     CloseLoop { loop_type: LoopType },
     OpenLoopCondition,
     CloseLoopCondition,
     OpenLoopBody,
     CloseLoopBody,
+    OpenLoopIterator,
+    CloseLoopIterator,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,6 +186,14 @@ impl HaplToken {
 
     pub fn close_loop_body() -> Self {
         Self::new(HaplTokenType::CloseLoopBody, Some("close_loop_body".to_string()))
+    }
+
+    pub fn open_loop_iterator() -> Self {
+        Self::new(HaplTokenType::OpenLoopIterator, Some("open_loop_iterator".to_string()))
+    }
+
+    pub fn close_loop_iterator() -> Self {
+        Self::new(HaplTokenType::CloseLoopIterator, Some("close_loop_iterator".to_string()))
     }
 }
 
@@ -358,6 +362,60 @@ impl HaplLexer {
                     self.tokens.push(HaplToken::close_loop(LoopType::While));
                     return;
                 }
+
+
+                // -----------------------------------------
+                // for loops <div class="for">
+                // -----------------------------------------
+                if class == "for" {
+                    self.tokens.push(HaplToken::open_loop(LoopType::For));
+                    for child in &tag.child_tags {
+                        match child.tag_type.as_str() {
+                            "div" => {
+                                if let Some(child_class) = &child.class {
+                                    match child_class.as_str() {
+                                        // -----------------------------------------
+                                        // Iterator value condition block <div class="iterator">
+                                        // -----------------------------------------
+                                        "iterator" => {
+                                            self.tokens.push(HaplToken::open_loop_iterator());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_loop_iterator());
+                                        }
+                                        // -----------------------------------------
+                                        // For loop condition block <div class="condition">
+                                        // -----------------------------------------
+                                        "condition" => {
+                                            self.tokens.push(HaplToken::open_loop_condition());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_loop_condition());
+                                        }
+                                        // -----------------------------------------
+                                        // For loop body block <div class="body">
+                                        // -----------------------------------------
+                                        "body" => {
+                                            self.tokens.push(HaplToken::open_loop_body());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_loop_body());
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    self.tokens.push(HaplToken::close_loop(LoopType::For));
+                    return;
+                }
+
             }
         }
 
@@ -576,6 +634,12 @@ impl HaplLexer {
                 }
                 HaplTokenType::CloseLoopBody => {
                     println!("CloseLoopBody -> {:?}", token.value);
+                }
+                HaplTokenType::OpenLoopIterator => {
+                    println!("OpenLoopIterator -> {:?}", token.value);
+                }
+                HaplTokenType::CloseLoopIterator => {
+                    println!("CloseLoopIterator -> {:?}", token.value);
                 }
             }
         }

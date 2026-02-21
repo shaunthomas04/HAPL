@@ -239,6 +239,11 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenLoop { loop_type } if loop_type == LoopType::While => self.parse_while(),
 
+            // -------------------------
+            // For statement
+            // -------------------------
+            HaplTokenType::OpenLoop { loop_type } if loop_type == LoopType::For => self.parse_for(),
+
             // Everything else: parse as expression
             HaplTokenType::OpenVarDec { .. } 
             | HaplTokenType::OpenOperator { .. }
@@ -380,6 +385,94 @@ impl HaplParser {
 
         Expr::WhileLoop {
             condition: Box::new(condition_expr),
+            body: body_statements,
+        }
+    }
+
+    
+    // --------------------------------------------------
+    // Parse for loop
+    // --------------------------------------------------
+    fn parse_for(&mut self) -> Expr {
+        // Ensure current token is a For loop
+        if let HaplTokenType::OpenLoop { loop_type } = self.current_token() {
+            if loop_type != LoopType::For {
+                panic!("Expected a for loop but found {:?}", self.current_token());
+            }
+        } else {
+            panic!("Expected OpenLoop(For) but found {:?}", self.current_token());
+        }
+
+        self.advance(); // consume OpenLoop
+
+        // ----------------------------
+        // Parse iterator (variable OR literal)
+        // ----------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenLoopIterator) {
+            panic!("Expected <loop_iterator> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume OpenLoopIterator
+
+        let iterator_expr = self.parse_expression();
+
+        // Extract iterator name or value
+        let iterator_name_or_value = match &iterator_expr {
+            Expr::VariableReference { name } => name.clone(),
+            Expr::Literal(LiteralValue::Integer(_)) => "__literal_iterator__".to_string(), // placeholder name for literal iterators
+            _ => panic!("For loop iterator must be a variable reference or an integer literal"),
+        };
+
+        if !matches!(self.current_token(), HaplTokenType::CloseLoopIterator) {
+            panic!("Expected </loop_iterator> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume CloseLoopIterator
+
+        // ----------------------------
+        // Parse condition
+        // ----------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenLoopCondition) {
+            panic!("Expected <loop_condition> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume OpenLoopCondition
+
+        let condition_expr = self.parse_expression();
+
+        if !matches!(self.current_token(), HaplTokenType::CloseLoopCondition) {
+            panic!("Expected </loop_condition> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume CloseLoopCondition
+
+        // ----------------------------
+        // Parse body
+        // ----------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenLoopBody) {
+            panic!("Expected <loop_body> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume OpenLoopBody
+
+        let mut body_statements = Vec::new();
+        while !matches!(self.current_token(), HaplTokenType::CloseLoopBody) {
+            body_statements.push(self.parse_statement());
+        }
+        self.advance(); // consume CloseLoopBody
+
+        // ----------------------------
+        // Close loop
+        // ----------------------------
+        if let HaplTokenType::CloseLoop { loop_type } = self.current_token() {
+            if loop_type != LoopType::For {
+                panic!("Expected CloseLoop(For) but found {:?}", self.current_token());
+            }
+        } else {
+            panic!("Expected CloseLoop but found {:?}", self.current_token());
+        }
+        self.advance(); // consume CloseLoop
+
+        Expr::ForLoop {
+            iterator: iterator_name_or_value,
+            initializer: Some(Box::new(iterator_expr)), // store the initial iterator expression
+            condition: Box::new(condition_expr),
+            increment: None, // currently we don’t have a separate increment block
             body: body_statements,
         }
     }
