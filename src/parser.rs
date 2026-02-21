@@ -1,4 +1,4 @@
-use crate::lexer::{HaplToken, HaplTokenType, LexerTagType};
+use crate::lexer::{HaplToken, HaplTokenType, LexerTagType, LoopType};
 use crate::ast::{Expr, Operator, StaticType, LiteralValue, ConditionalBlock};
 use std::collections::HashMap;
 
@@ -237,8 +237,7 @@ impl HaplParser {
             // -------------------------
             // While statement
             // -------------------------
-            HaplTokenType::OpenWhile => self.parse_while(),
-
+            HaplTokenType::OpenLoop { loop_type } if loop_type == LoopType::While => self.parse_while(),
 
             // Everything else: parse as expression
             HaplTokenType::OpenVarDec { .. } 
@@ -326,55 +325,58 @@ impl HaplParser {
     // Parse while loop
     // --------------------------------------------------
     fn parse_while(&mut self) -> Expr {
-        // Expect OpenWhile
-        if !matches!(self.current_token(), HaplTokenType::OpenWhile) {
-            panic!("Expected <while> but found {:?}", self.current_token());
+        // Expect OpenLoop with type While
+        if let HaplTokenType::OpenLoop { loop_type } = self.current_token() {
+            if loop_type != LoopType::While {
+                panic!("Expected a while loop but found {:?}", self.current_token());
+            }
+        } else {
+            panic!("Expected OpenLoop but found {:?}", self.current_token());
         }
 
-        self.advance(); // consume OpenWhile
+        self.advance(); // consume OpenLoop
 
         // ----------------------------
         // Parse condition
         // ----------------------------
-        if !matches!(self.current_token(), HaplTokenType::OpenWhileCondition) {
-            panic!("Expected <while_condition> but found {:?}", self.current_token());
+        if !matches!(self.current_token(), HaplTokenType::OpenLoopCondition) {
+            panic!("Expected <loop_condition> but found {:?}", self.current_token());
         }
-
-        self.advance(); // consume OpenWhileCondition
+        self.advance(); // consume OpenLoopCondition
 
         let condition_expr = self.parse_expression();
 
-        if !matches!(self.current_token(), HaplTokenType::CloseWhileCondition) {
-            panic!("While condition not properly closed");
+        if !matches!(self.current_token(), HaplTokenType::CloseLoopCondition) {
+            panic!("Loop condition not properly closed");
         }
-
-        self.advance(); // consume CloseWhileCondition
+        self.advance(); // consume CloseLoopCondition
 
         // ----------------------------
         // Parse body
         // ----------------------------
-        if !matches!(self.current_token(), HaplTokenType::OpenWhileBody) {
-            panic!("Expected <while_body> but found {:?}", self.current_token());
+        if !matches!(self.current_token(), HaplTokenType::OpenLoopBody) {
+            panic!("Expected <loop_body> but found {:?}", self.current_token());
         }
-
-        self.advance(); // consume OpenWhileBody
+        self.advance(); // consume OpenLoopBody
 
         let mut body_statements = Vec::new();
-
-        while !matches!(self.current_token(), HaplTokenType::CloseWhileBody) {
+        while !matches!(self.current_token(), HaplTokenType::CloseLoopBody) {
             body_statements.push(self.parse_statement());
         }
 
-        self.advance(); // consume CloseWhileBody
+        self.advance(); // consume CloseLoopBody
 
         // ----------------------------
-        // Close while
+        // Close loop
         // ----------------------------
-        if !matches!(self.current_token(), HaplTokenType::CloseWhile) {
-            panic!("While block not properly closed");
+        if let HaplTokenType::CloseLoop { loop_type } = self.current_token() {
+            if loop_type != LoopType::While {
+                panic!("Expected CloseLoop(While) but found {:?}", self.current_token());
+            }
+        } else {
+            panic!("Expected CloseLoop but found {:?}", self.current_token());
         }
-
-        self.advance(); // consume CloseWhile
+        self.advance(); // consume CloseLoop
 
         Expr::WhileLoop {
             condition: Box::new(condition_expr),
