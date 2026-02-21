@@ -234,6 +234,12 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenConditional => self.parse_conditional(),
 
+            // -------------------------
+            // While statement
+            // -------------------------
+            HaplTokenType::OpenWhile => self.parse_while(),
+
+
             // Everything else: parse as expression
             HaplTokenType::OpenVarDec { .. } 
             | HaplTokenType::OpenOperator { .. }
@@ -313,6 +319,67 @@ impl HaplParser {
 
         self.advance(); // consume CloseElse
         statements
+    }
+
+
+    // --------------------------------------------------
+    // Parse while loop
+    // --------------------------------------------------
+    fn parse_while(&mut self) -> Expr {
+        // Expect OpenWhile
+        if !matches!(self.current_token(), HaplTokenType::OpenWhile) {
+            panic!("Expected <while> but found {:?}", self.current_token());
+        }
+
+        self.advance(); // consume OpenWhile
+
+        // ----------------------------
+        // Parse condition
+        // ----------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenWhileCondition) {
+            panic!("Expected <while_condition> but found {:?}", self.current_token());
+        }
+
+        self.advance(); // consume OpenWhileCondition
+
+        let condition_expr = self.parse_expression();
+
+        if !matches!(self.current_token(), HaplTokenType::CloseWhileCondition) {
+            panic!("While condition not properly closed");
+        }
+
+        self.advance(); // consume CloseWhileCondition
+
+        // ----------------------------
+        // Parse body
+        // ----------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenWhileBody) {
+            panic!("Expected <while_body> but found {:?}", self.current_token());
+        }
+
+        self.advance(); // consume OpenWhileBody
+
+        let mut body_statements = Vec::new();
+
+        while !matches!(self.current_token(), HaplTokenType::CloseWhileBody) {
+            body_statements.push(self.parse_statement());
+        }
+
+        self.advance(); // consume CloseWhileBody
+
+        // ----------------------------
+        // Close while
+        // ----------------------------
+        if !matches!(self.current_token(), HaplTokenType::CloseWhile) {
+            panic!("While block not properly closed");
+        }
+
+        self.advance(); // consume CloseWhile
+
+        Expr::WhileLoop {
+            condition: Box::new(condition_expr),
+            body: body_statements,
+        }
     }
 
     // --------------------------------------------------

@@ -37,7 +37,14 @@ pub enum Expr {
     Assignment {
         name: String,
         value: Box<Expr>
-    }
+    },
+
+    /// While loop:
+    /// <while>...</while>
+    WhileLoop {
+        condition: Box<Expr>,
+        body: Vec<Expr>,
+    },
 }
 
 /// Represents a single `if` or `elif` block
