@@ -12,10 +12,6 @@
         <span class="integer">1</span>
     </var>
 
-    <var class="integer" id="y">
-        <var class="x"></var>
-    </var>
-
     <!-- While loop -->
     <div class="while">
         <div class="condition">
@@ -30,18 +26,46 @@
                 <var class="x"></var>
             </p>
 
-            <var class="y">
-                <var class="x"></var>
-            </var>
-
            <var class="x">
                 <div class="+">
-                    <var class="y"></var>
+                    <var class="x"></var>
                     <span class="integer">1</span>
                 </div>
             </var>
         </div>
     </div>
+
+
+    <!-- Initialize y for for loop counter -->
+    <var class="integer" id="y">
+        <span class="integer">1</span>
+    </var>
+
+    <div class="for">
+        <div class="iterator">
+            <var class="y"></var>
+        </div>
+        <div class="condition">
+            <div class="greater_equal">
+                <span class="integer">10</span>
+                <var class="y"></var>
+            </div>
+        </div>
+        
+        <div class="increment">
+            <span class="integer">1</span>
+        </div>
+
+
+        <div class="body">
+            <p>
+                <var class="y"></var>
+            </p>
+        </div>
+    </div>
+
+
+
 
 
 

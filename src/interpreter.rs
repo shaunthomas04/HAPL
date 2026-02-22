@@ -187,6 +187,76 @@ impl Interpreter {
                 }
                 last_val
             }
+
+            // -------------------------
+            // For loop
+            // -------------------------
+            Expr::ForLoop {
+                iterator,
+                condition,
+                increment,
+                body,
+            } => {
+                let mut last_val = LiteralValue::Boolean(false);
+
+                // If iterator does not exist yet, default to 0
+                if !self.runtime_symbol_table.contains_key(iterator) {
+                    self.runtime_symbol_table
+                        .insert(iterator.clone(), LiteralValue::Integer(0));
+                }
+
+                loop {
+                    // -------------------------
+                    // Evaluate condition
+                    // -------------------------
+                    let cond_val = self.eval(condition);
+
+                    match cond_val {
+                        LiteralValue::Boolean(true) => {
+                            // -------------------------
+                            // Execute body
+                            // -------------------------
+                            for stmt in body {
+                                last_val = self.eval(stmt);
+                            }
+
+                            // -------------------------
+                            // Evaluate increment
+                            // -------------------------
+                            let step_val = self.eval(increment);
+
+                            let step = match step_val {
+                                LiteralValue::Integer(n) => n,
+                                _ => panic!("For loop increment must evaluate to Integer"),
+                            };
+
+                            // -------------------------
+                            // Update iterator
+                            // -------------------------
+                            let current_val = self
+                                .runtime_symbol_table
+                                .get(iterator)
+                                .unwrap_or_else(|| panic!("Iterator '{}' not found", iterator));
+
+                            let current_int = match current_val {
+                                LiteralValue::Integer(n) => *n,
+                                _ => panic!("For loop iterator '{}' must be Integer", iterator),
+                            };
+
+                            self.runtime_symbol_table.insert(
+                                iterator.clone(),
+                                LiteralValue::Integer(current_int + step),
+                            );
+                        }
+
+                        LiteralValue::Boolean(false) => break,
+
+                        _ => panic!("For loop condition must evaluate to Boolean"),
+                    }
+                }
+
+                last_val
+            }
         }
     }
 
