@@ -394,7 +394,9 @@ impl HaplParser {
     // Parse for loop
     // --------------------------------------------------
     fn parse_for(&mut self) -> Expr {
-        // Ensure current token is a For loop
+        // ----------------------------------
+        // Ensure current token is OpenLoop(For)
+        // ----------------------------------
         if let HaplTokenType::OpenLoop { loop_type } = self.current_token() {
             if loop_type != LoopType::For {
                 panic!("Expected a for loop but found {:?}", self.current_token());
@@ -405,48 +407,86 @@ impl HaplParser {
 
         self.advance(); // consume OpenLoop
 
-        // ----------------------------
-        // Parse iterator (variable OR literal)
-        // ----------------------------
+        // ==================================
+        // Parse Iterator
+        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopIterator) {
-            panic!("Expected <loop_iterator> but found {:?}", self.current_token());
+            panic!("Expected <iterator> but found {:?}", self.current_token());
         }
         self.advance(); // consume OpenLoopIterator
 
         let iterator_expr = self.parse_expression();
 
-        // Extract iterator name or value
-        let iterator_name_or_value = match &iterator_expr {
+        let iterator_name = match &iterator_expr {
             Expr::VariableReference { name } => name.clone(),
-            Expr::Literal(LiteralValue::Integer(_)) => "__literal_iterator__".to_string(), // placeholder name for literal iterators
-            _ => panic!("For loop iterator must be a variable reference or an integer literal"),
+            _ => panic!("For loop iterator must be a variable reference"),
         };
 
+        // Auto-declare iterator if not already declared
+        if !self.symbol_table.contains_key(&iterator_name) {
+            self.symbol_table.insert(iterator_name.clone(), StaticType::Integer);
+        }
+
+        // Enforce iterator is Integer
+        let iterator_type = self.symbol_table.get(&iterator_name).unwrap();
+        if *iterator_type != StaticType::Integer {
+            panic!("For loop iterator '{}' must be Integer", iterator_name);
+        }
+
         if !matches!(self.current_token(), HaplTokenType::CloseLoopIterator) {
-            panic!("Expected </loop_iterator> but found {:?}", self.current_token());
+            panic!("Expected </iterator> but found {:?}", self.current_token());
         }
         self.advance(); // consume CloseLoopIterator
 
-        // ----------------------------
-        // Parse condition
-        // ----------------------------
+        // ==================================
+        // Parse Condition
+        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopCondition) {
-            panic!("Expected <loop_condition> but found {:?}", self.current_token());
+            panic!("Expected <condition> but found {:?}", self.current_token());
         }
         self.advance(); // consume OpenLoopCondition
 
         let condition_expr = self.parse_expression();
 
+        // Enforce Boolean condition (basic static check for literals/operators)
+        if let Some(cond_type) = self.infer_type(&condition_expr) {
+            if cond_type != StaticType::Boolean {
+                panic!("For loop condition must evaluate to Boolean");
+            }
+        }
+
         if !matches!(self.current_token(), HaplTokenType::CloseLoopCondition) {
-            panic!("Expected </loop_condition> but found {:?}", self.current_token());
+            panic!("Expected </condition> but found {:?}", self.current_token());
         }
         self.advance(); // consume CloseLoopCondition
 
-        // ----------------------------
-        // Parse body
-        // ----------------------------
+        // ==================================
+        // Parse Increment
+        // ==================================
+        if !matches!(self.current_token(), HaplTokenType::OpenLoopIncrement) {
+            panic!("Expected <increment> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume OpenLoopIncrement
+
+        let increment_expr = self.parse_expression();
+
+        // Enforce Integer increment
+        if let Some(inc_type) = self.infer_type(&increment_expr) {
+            if inc_type != StaticType::Integer {
+                panic!("For loop increment must evaluate to Integer");
+            }
+        }
+
+        if !matches!(self.current_token(), HaplTokenType::CloseLoopIncrement) {
+            panic!("Expected </increment> but found {:?}", self.current_token());
+        }
+        self.advance(); // consume CloseLoopIncrement
+
+        // ==================================
+        // Parse Body
+        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopBody) {
-            panic!("Expected <loop_body> but found {:?}", self.current_token());
+            panic!("Expected <body> but found {:?}", self.current_token());
         }
         self.advance(); // consume OpenLoopBody
 
@@ -454,11 +494,12 @@ impl HaplParser {
         while !matches!(self.current_token(), HaplTokenType::CloseLoopBody) {
             body_statements.push(self.parse_statement());
         }
+
         self.advance(); // consume CloseLoopBody
 
-        // ----------------------------
-        // Close loop
-        // ----------------------------
+        // ==================================
+        // Close Loop
+        // ==================================
         if let HaplTokenType::CloseLoop { loop_type } = self.current_token() {
             if loop_type != LoopType::For {
                 panic!("Expected CloseLoop(For) but found {:?}", self.current_token());
@@ -468,11 +509,13 @@ impl HaplParser {
         }
         self.advance(); // consume CloseLoop
 
+        // ==================================
+        // Build AST Node
+        // ==================================
         Expr::ForLoop {
-            iterator: iterator_name_or_value,
-            initializer: Some(Box::new(iterator_expr)), // store the initial iterator expression
+            iterator: iterator_name,
             condition: Box::new(condition_expr),
-            increment: None, // currently we don’t have a separate increment block
+            increment: Box::new(increment_expr),
             body: body_statements,
         }
     }
@@ -562,6 +605,40 @@ impl HaplParser {
             LexerTagType::LessEqual => Operator::LessEqual,
             LexerTagType::Greater => Operator::Greater,
             LexerTagType::GreaterEqual => Operator::GreaterEqual,
+        }
+    }
+
+    fn infer_type(&self, expr: &Expr) -> Option<StaticType> {
+        match expr {
+            Expr::Literal(LiteralValue::Integer(_)) => Some(StaticType::Integer),
+            Expr::Literal(LiteralValue::Double(_)) => Some(StaticType::Double),
+            Expr::Literal(LiteralValue::String(_)) => Some(StaticType::String),
+            Expr::Literal(LiteralValue::Boolean(_)) => Some(StaticType::Boolean),
+
+            Expr::VariableReference { name } => {
+                self.symbol_table.get(name).copied()
+            }
+
+            Expr::Operation { op, .. } => {
+                match op {
+                    Operator::Equal
+                    | Operator::NotEqual
+                    | Operator::Less
+                    | Operator::LessEqual
+                    | Operator::Greater
+                    | Operator::GreaterEqual
+                    | Operator::And
+                    | Operator::Or
+                    | Operator::Not => Some(StaticType::Boolean),
+
+                    Operator::Add
+                    | Operator::Subtract
+                    | Operator::Multiply
+                    | Operator::Divide => Some(StaticType::Integer),
+                }
+            }
+
+            _ => None,
         }
     }
 }

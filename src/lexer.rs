@@ -49,6 +49,8 @@ pub enum HaplTokenType {
     CloseLoopBody,
     OpenLoopIterator,
     CloseLoopIterator,
+    OpenLoopIncrement,
+    CloseLoopIncrement,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,6 +196,14 @@ impl HaplToken {
 
     pub fn close_loop_iterator() -> Self {
         Self::new(HaplTokenType::CloseLoopIterator, Some("close_loop_iterator".to_string()))
+    }
+
+    pub fn open_loop_increment() -> Self {
+        Self::new(HaplTokenType::OpenLoopIncrement, Some("open_loop_increment".to_string()))
+    }
+
+    pub fn close_loop_increment() -> Self {
+        Self::new(HaplTokenType::CloseLoopIncrement, Some("close_loop_increment".to_string()))
     }
 }
 
@@ -393,6 +403,16 @@ impl HaplLexer {
                                                 self.walk(grandchild);
                                             }
                                             self.tokens.push(HaplToken::close_loop_condition());
+                                        }
+                                        // -----------------------------------------
+                                        // Increment value condition block <div class="increment">
+                                        // -----------------------------------------
+                                        "increment" => {
+                                            self.tokens.push(HaplToken::open_loop_increment());
+                                            for grandchild in &child.child_tags {
+                                                self.walk(grandchild);
+                                            }
+                                            self.tokens.push(HaplToken::close_loop_increment());
                                         }
                                         // -----------------------------------------
                                         // For loop body block <div class="body">
@@ -640,6 +660,12 @@ impl HaplLexer {
                 }
                 HaplTokenType::CloseLoopIterator => {
                     println!("CloseLoopIterator -> {:?}", token.value);
+                }
+                HaplTokenType::OpenLoopIncrement => {
+                    println!("OpenLoopIncrement -> {:?}", token.value);
+                }
+                HaplTokenType::CloseLoopIncrement => {
+                    println!("CloseLoopIncrement -> {:?}", token.value);
                 }
             }
         }

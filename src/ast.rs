@@ -48,11 +48,10 @@ pub enum Expr {
 
     ForLoop {
         iterator: String,
-        initializer: Option<Box<Expr>>,
         condition: Box<Expr>,
-        increment: Option<Box<Expr>>,
+        increment: Box<Expr>,   // required
         body: Vec<Expr>,
-    },
+    }
 }
 
 /// Represents a single `if` or `elif` block

@@ -193,40 +193,65 @@ impl Interpreter {
             // -------------------------
             Expr::ForLoop {
                 iterator,
-                initializer,
                 condition,
                 increment,
                 body,
             } => {
                 let mut last_val = LiteralValue::Boolean(false);
 
-                // Initialize iterator variable if provided
-                if let Some(init_expr) = initializer {
-                    let val = self.eval(init_expr);
-                    self.runtime_symbol_table.insert(iterator.clone(), val);
-                } else if !self.runtime_symbol_table.contains_key(iterator) {
-                    // Default to 0 if no initializer and iterator doesn't exist yet
-                    self.runtime_symbol_table.insert(iterator.clone(), LiteralValue::Integer(0));
+                // If iterator does not exist yet, default to 0
+                if !self.runtime_symbol_table.contains_key(iterator) {
+                    self.runtime_symbol_table
+                        .insert(iterator.clone(), LiteralValue::Integer(0));
                 }
 
-                // Loop while condition is true
                 loop {
+                    // -------------------------
+                    // Evaluate condition
+                    // -------------------------
                     let cond_val = self.eval(condition);
+
                     match cond_val {
                         LiteralValue::Boolean(true) => {
+                            // -------------------------
                             // Execute body
+                            // -------------------------
                             for stmt in body {
                                 last_val = self.eval(stmt);
                             }
 
-                            // Apply increment if present
-                            if let Some(inc_expr) = increment {
-                                let val = self.eval(inc_expr);
-                                self.runtime_symbol_table.insert(iterator.clone(), val);
-                            }
+                            // -------------------------
+                            // Evaluate increment
+                            // -------------------------
+                            let step_val = self.eval(increment);
+
+                            let step = match step_val {
+                                LiteralValue::Integer(n) => n,
+                                _ => panic!("For loop increment must evaluate to Integer"),
+                            };
+
+                            // -------------------------
+                            // Update iterator
+                            // -------------------------
+                            let current_val = self
+                                .runtime_symbol_table
+                                .get(iterator)
+                                .unwrap_or_else(|| panic!("Iterator '{}' not found", iterator));
+
+                            let current_int = match current_val {
+                                LiteralValue::Integer(n) => *n,
+                                _ => panic!("For loop iterator '{}' must be Integer", iterator),
+                            };
+
+                            self.runtime_symbol_table.insert(
+                                iterator.clone(),
+                                LiteralValue::Integer(current_int + step),
+                            );
                         }
+
                         LiteralValue::Boolean(false) => break,
-                        _ => panic!("For loop condition must evaluate to a boolean"),
+
+                        _ => panic!("For loop condition must evaluate to Boolean"),
                     }
                 }
 
