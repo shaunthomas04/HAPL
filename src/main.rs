@@ -11,7 +11,7 @@ use std::env;
 
 use crate::lexer::{HaplLexer, HaplTokenType};
 use crate::parser::HaplParser;
-use crate::interpreter::Interpreter;
+// use crate::interpreter::Interpreter;
 use crate::util::load_html_file;
 use crate::html_extractor::{parse_html_to_tags, HtmlTag};
 
@@ -39,41 +39,41 @@ fn main() {
     // println!("--- TOKENS ---");
     lexer.print();
 
-    let tokens = lexer
-    .tokens()
-    .iter()
-    .filter(|t| {
-        !matches!(
-            t.token_type,
-            HaplTokenType::OpenHtmlTag { .. }
-                | HaplTokenType::CloseHtmlTag { .. }
-        )
-    })
-    .cloned()
-    .collect::<Vec<_>>();
+    // let tokens = lexer
+    // .tokens()
+    // .iter()
+    // .filter(|t| {
+    //     !matches!(
+    //         t.token_type,
+    //         HaplTokenType::OpenHtmlTag { .. }
+    //             | HaplTokenType::CloseHtmlTag { .. }
+    //     )
+    // })
+    // .cloned()
+    // .collect::<Vec<_>>();
 
 
-    if tokens.is_empty() {
-        println!("No tokens found.");
-        return;
-    }
-
-    // 3️⃣ Parse entire program
-    let mut parser = HaplParser::new(tokens);
-    let ast_nodes = parser.parse_program();
-
-    // println!("\n--- AST ---");
-    // for ast in &ast_nodes {
-    //     println!("{:#?}", ast);
+    // if tokens.is_empty() {
+    //     println!("No tokens found.");
+    //     return;
     // }
 
-    // 4️⃣ Interpret entire program
-    println!("\n--- RESULTS ---");
+    // // 3️⃣ Parse entire program
+    // let mut parser = HaplParser::new(tokens);
+    // let ast_nodes = parser.parse_program();
 
-    let mut interpreter = Interpreter::new();
+    // // println!("\n--- AST ---");
+    // // for ast in &ast_nodes {
+    // //     println!("{:#?}", ast);
+    // // }
 
-    for ast in &ast_nodes {
-        let result = interpreter.eval(ast);
-        println!("{:?}", result);
-    }
+    // // 4️⃣ Interpret entire program
+    // println!("\n--- RESULTS ---");
+
+    // let mut interpreter = Interpreter::new();
+
+    // for ast in &ast_nodes {
+    //     let result = interpreter.eval(ast);
+    //     println!("{:?}", result);
+    // }
 }
