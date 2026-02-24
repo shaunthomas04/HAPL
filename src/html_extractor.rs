@@ -1,5 +1,6 @@
 use crate::util::abbreviate_content;
 
+#[derive(Debug)]
 pub struct HtmlTag {
     pub tag_type: String,
     pub id: Option<String>,

@@ -33,6 +33,8 @@ pub enum HaplTokenType {
     CloseVarAssign { name: String },
     OpenPrint,
     ClosePrint,
+    
+    //conditional logic
     OpenConditional,
     CloseConditional,
     OpenIf,
@@ -41,6 +43,8 @@ pub enum HaplTokenType {
     CloseElif,
     OpenElse,
     CloseElse,
+    
+    //loops
     OpenLoop { loop_type: LoopType },
     CloseLoop { loop_type: LoopType },
     OpenLoopCondition,
@@ -51,6 +55,22 @@ pub enum HaplTokenType {
     CloseLoopIterator,
     OpenLoopIncrement,
     CloseLoopIncrement,
+
+    //functions
+    OpenFunction { name: String, return_type: StaticType },
+    CloseFunction { name: String },
+    OpenParams,
+    CloseParams,
+    OpenParam { name: String, param_type: StaticType, },
+    CloseParam { name: String },
+    OpenFunctionBody,
+    CloseFunctionBody,
+    OpenFunctionCall { name: String },
+    CloseFunctionCall { name: String },
+    OpenReturn,
+    CloseReturn,
+    OpenArgs,
+    CloseArgs,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -204,6 +224,88 @@ impl HaplToken {
 
     pub fn close_loop_increment() -> Self {
         Self::new(HaplTokenType::CloseLoopIncrement, Some("close_loop_increment".to_string()))
+    }
+
+    pub fn open_function(name: String, return_type: StaticType) -> Self {
+        Self::new(
+            HaplTokenType::OpenFunction { 
+                name: name.clone(), 
+                return_type 
+            },
+            Some(name),
+        )
+    }
+
+    pub fn close_function(name: String) -> Self {
+        Self::new(
+            HaplTokenType::CloseFunction { name: name.clone() },
+            Some(name),
+        )
+    }
+
+    pub fn open_params() -> Self {
+        Self::new(HaplTokenType::OpenParams, Some("params".to_string()))
+    }
+
+    pub fn close_params() -> Self {
+        Self::new(HaplTokenType::CloseParams, Some("params".to_string()))
+    }
+
+    pub fn open_param(name: String, param_type: StaticType) -> Self {
+        Self::new(
+            HaplTokenType::OpenParam {
+                name: name.clone(),
+                param_type,
+            },
+            Some(format!("{:?} {}", param_type, name)),
+        )
+    }
+
+    pub fn close_param(name: String) -> Self {
+        Self::new(
+            HaplTokenType::CloseParam {
+                name: name.clone(),
+            },
+            Some(name),
+        )
+    }
+
+    pub fn open_function_body() -> Self {
+        Self::new(HaplTokenType::OpenFunctionBody, Some("function_body".to_string()))
+    }
+
+    pub fn close_function_body() -> Self {
+        Self::new(HaplTokenType::CloseFunctionBody, Some("function_body".to_string()))
+    }
+
+    pub fn open_function_call(name: String) -> Self {
+        Self::new(
+            HaplTokenType::OpenFunctionCall { name: name.clone() },
+            Some(name),
+        )
+    }
+
+    pub fn close_function_call(name: String) -> Self {
+        Self::new(
+            HaplTokenType::CloseFunctionCall { name: name.clone() },
+            Some(name),
+        )
+    }
+
+    pub fn open_return() -> Self {
+        Self::new(HaplTokenType::OpenReturn, Some("return".to_string()))
+    }
+
+    pub fn close_return() -> Self {
+        Self::new(HaplTokenType::CloseReturn, Some("return".to_string()))
+    }
+
+    pub fn open_args() -> Self {
+        Self::new(HaplTokenType::OpenArgs, Some("args".to_string()))
+    }
+
+    pub fn close_args() -> Self {
+        Self::new(HaplTokenType::CloseArgs, Some("args".to_string()))
     }
 }
 
@@ -436,6 +538,202 @@ impl HaplLexer {
                     return;
                 }
 
+                // -----------------------------------------
+                // Function declaration
+                // <div class="string-function" id="myFunc">
+                // -----------------------------------------
+                if let Some(return_type) = self.parse_function_class(class) {
+                    let name = tag.id.clone()
+                        .expect("Function must have an id attribute");
+
+                    self.tokens.push(
+                        HaplToken::new(
+                            HaplTokenType::OpenFunction {
+                                name: name.clone(),
+                                return_type,
+                            },
+                            Some(name.clone()),
+                        )
+                    );
+
+                    for child in &tag.child_tags {
+                        if let Some(child_class) = &child.class {
+                            match child_class.as_str() {
+
+                                "params" => {
+                                    self.tokens.push(
+                                        HaplToken::new(
+                                            HaplTokenType::OpenParams,
+                                            Some("params".to_string())
+                                        )
+                                    );
+
+                                    for grandchild in &child.child_tags {
+
+                                        // Expect each param to be something like:
+                                        // <div class="integer-param" id="x">
+
+                                        if let Some(param_type) = self.parse_param_class(grandchild.class.as_deref()) {
+
+                                            let param_name = grandchild.id.clone()
+                                                .expect("Parameter must have an id attribute");
+
+                                            // OpenParam
+                                            self.tokens.push(
+                                                HaplToken::new(
+                                                    HaplTokenType::OpenParam {
+                                                        name: param_name.clone(),
+                                                        param_type,
+                                                    },
+                                                    Some(param_name.clone())
+                                                )
+                                            );
+
+                                            // Walk param contents if needed
+                                            for param_child in &grandchild.child_tags {
+                                                self.walk(param_child);
+                                            }
+
+                                            // CloseParam
+                                            self.tokens.push(
+                                                HaplToken::new(
+                                                    HaplTokenType::CloseParam {
+                                                        name: param_name.clone(),
+                                                    },
+                                                    Some(param_name)
+                                                )
+                                            );
+                                        }
+                                    }
+
+                                    self.tokens.push(
+                                        HaplToken::new(
+                                            HaplTokenType::CloseParams,
+                                            Some("params".to_string())
+                                        )
+                                    );
+                                }
+
+                                "body" => {
+                                    self.tokens.push(
+                                        HaplToken::new(
+                                            HaplTokenType::OpenFunctionBody,
+                                            Some("function_body".to_string())
+                                        )
+                                    );
+
+                                    for grandchild in &child.child_tags {
+                                        self.walk(grandchild);
+                                    }
+
+                                    self.tokens.push(
+                                        HaplToken::new(
+                                            HaplTokenType::CloseFunctionBody,
+                                            Some("function_body".to_string())
+                                        )
+                                    );
+                                }
+
+                                _ => {}
+                            }
+                        }
+                    }
+
+                    self.tokens.push(
+                        HaplToken::new(
+                            HaplTokenType::CloseFunction { name: name.clone() },
+                            Some(name),
+                        )
+                    );
+
+                    return;
+                }
+
+                // -----------------------------------------
+                // Function call
+                // <div class="function-name">
+                // -----------------------------------------
+                if tag.id.is_none() && tag.class.is_some() {
+                    let function_name = class.clone();
+
+                    // Prevent conflicts with reserved classes
+                    let reserved = [
+                        "+", "-", "*", "/",
+                        "&&", "||", "!",
+                        "equal", "not_equal",
+                        "less", "less_equal",
+                        "greater", "greater_equal",
+                        "conditional", "if", "elif", "else",
+                        "while", "for",
+                        "params", "body", "args",
+                    ];
+
+                    if !reserved.contains(&function_name.as_str()) {
+
+                        self.tokens.push(
+                            HaplToken::new(
+                                HaplTokenType::OpenFunctionCall {
+                                    name: function_name.clone(),
+                                },
+                                Some(function_name.clone()),
+                            )
+                        );
+
+                        for child in &tag.child_tags {
+                            if let Some(child_class) = &child.class {
+                                if child_class == "args" {
+                                    self.tokens.push(
+                                        HaplToken::new(
+                                            HaplTokenType::OpenArgs,
+                                            Some("args".to_string())
+                                        )
+                                    );
+
+                                    for grandchild in &child.child_tags {
+                                        self.walk(grandchild);
+                                    }
+
+                                    self.tokens.push(
+                                        HaplToken::new(
+                                            HaplTokenType::CloseArgs,
+                                            Some("args".to_string())
+                                        )
+                                    );
+
+                                    continue;
+                                }
+                            }
+
+                            self.walk(child);
+                        }
+
+                        self.tokens.push(
+                            HaplToken::new(
+                                HaplTokenType::CloseFunctionCall {
+                                    name: function_name.clone(),
+                                },
+                                Some(function_name),
+                            )
+                        );
+
+                        return;
+                    }
+                }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             }
         }
 
@@ -574,26 +872,42 @@ impl HaplLexer {
     pub fn print(&self) {
         for token in &self.tokens {
             match &token.token_type {
+
+                // ========================
+                // Operators
+                // ========================
                 HaplTokenType::OpenOperator { name } => {
                     println!("OpenOperator({}) -> {:?}", operator_to_str(*name), token.value);
                 }
                 HaplTokenType::CloseOperator { name } => {
                     println!("CloseOperator({}) -> {:?}", operator_to_str(*name), token.value);
                 }
+
+                // ========================
+                // HTML
+                // ========================
                 HaplTokenType::OpenHtmlTag { name } => {
                     println!("OpenHtmlTag({}) -> {:?}", name, token.value);
                 }
                 HaplTokenType::CloseHtmlTag { name } => {
                     println!("CloseHtmlTag({}) -> {:?}", name, token.value);
                 }
+
+                // ========================
+                // Literals
+                // ========================
                 HaplTokenType::Literal(lit) => {
                     println!("Literal({:?}) -> {:?}", lit, token.value);
                 }
+
+                // ========================
+                // Variables
+                // ========================
                 HaplTokenType::OpenVarDec { var_type, name } => {
-                    println!("OpenVarDec({:?}) -> {}", var_type, name);
+                    println!("OpenVarDec({:?}, {}) -> {:?}", var_type, name, token.value);
                 }
                 HaplTokenType::CloseVarDec { var_type, name } => {
-                    println!("CloseVarDec({:?}) -> {}", var_type, name);
+                    println!("CloseVarDec({:?}, {}) -> {:?}", var_type, name, token.value);
                 }
                 HaplTokenType::OpenVarRef { name } => {
                     println!("OpenVarRef({}) -> {:?}", name, token.value);
@@ -607,12 +921,20 @@ impl HaplLexer {
                 HaplTokenType::CloseVarAssign { name } => {
                     println!("CloseVarAssign({}) -> {:?}", name, token.value);
                 }
+
+                // ========================
+                // Print
+                // ========================
                 HaplTokenType::OpenPrint => {
                     println!("OpenPrint -> {:?}", token.value);
                 }
                 HaplTokenType::ClosePrint => {
                     println!("ClosePrint -> {:?}", token.value);
                 }
+
+                // ========================
+                // Conditionals
+                // ========================
                 HaplTokenType::OpenConditional => {
                     println!("OpenConditional -> {:?}", token.value);
                 }
@@ -637,11 +959,15 @@ impl HaplLexer {
                 HaplTokenType::CloseElse => {
                     println!("CloseElse -> {:?}", token.value);
                 }
+
+                // ========================
+                // Loops
+                // ========================
                 HaplTokenType::OpenLoop { loop_type } => {
-                    println!("OpenLoop -> {:?}", loop_type);
+                    println!("OpenLoop({:?}) -> {:?}", loop_type, token.value);
                 }
                 HaplTokenType::CloseLoop { loop_type } => {
-                    println!("CloseLoop -> {:?}", loop_type);
+                    println!("CloseLoop({:?}) -> {:?}", loop_type, token.value);
                 }
                 HaplTokenType::OpenLoopCondition => {
                     println!("OpenLoopCondition -> {:?}", token.value);
@@ -666,6 +992,64 @@ impl HaplLexer {
                 }
                 HaplTokenType::CloseLoopIncrement => {
                     println!("CloseLoopIncrement -> {:?}", token.value);
+                }
+
+                // ========================
+                // Functions
+                // ========================
+                HaplTokenType::OpenFunction { name, return_type } => {
+                    println!("OpenFunction({}, {:?}) -> {:?}", name, return_type, token.value);
+                }
+                HaplTokenType::CloseFunction { name } => {
+                    println!("CloseFunction({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenParams => {
+                    println!("OpenParams -> {:?}", token.value);
+                }
+                HaplTokenType::CloseParams => {
+                    println!("CloseParams -> {:?}", token.value);
+                }
+                HaplTokenType::OpenParam { name, param_type } => {
+                    println!("OpenParam({}, {:?}) -> {:?}", name, param_type, token.value);
+                }
+                HaplTokenType::CloseParam { name } => {
+                    println!("CloseParam({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenFunctionBody => {
+                    println!("OpenFunctionBody -> {:?}", token.value);
+                }
+                HaplTokenType::CloseFunctionBody => {
+                    println!("CloseFunctionBody -> {:?}", token.value);
+                }
+
+                // ========================
+                // Function Calls
+                // ========================
+                HaplTokenType::OpenFunctionCall { name } => {
+                    println!("OpenFunctionCall({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::CloseFunctionCall { name } => {
+                    println!("CloseFunctionCall({}) -> {:?}", name, token.value);
+                }
+
+                // ========================
+                // Return
+                // ========================
+                HaplTokenType::OpenReturn => {
+                    println!("OpenReturn -> {:?}", token.value);
+                }
+                HaplTokenType::CloseReturn => {
+                    println!("CloseReturn -> {:?}", token.value);
+                }
+
+                // ========================
+                // Args
+                // ========================
+                HaplTokenType::OpenArgs => {
+                    println!("OpenArgs -> {:?}", token.value);
+                }
+                HaplTokenType::CloseArgs => {
+                    println!("CloseArgs -> {:?}", token.value);
                 }
             }
         }
@@ -719,7 +1103,6 @@ impl HaplLexer {
         )
     }
 
-
     fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
         let trimmed = text.trim();
 
@@ -762,6 +1145,43 @@ impl HaplLexer {
             other => panic!("Unknown static type '{}'. Expected 'integer', 'double', 'boolean', or 'string'", other),
         }
     }
+
+    fn parse_function_class(&self, class: &str) -> Option<StaticType> {
+        if let Some(type_part) = class.strip_suffix("-function") {
+            return Some(match type_part {
+                "integer" => StaticType::Integer,
+                "double" => StaticType::Double,
+                "string" => StaticType::String,
+                "boolean" => StaticType::Boolean,
+                "void" => StaticType::Void,
+                other => panic!("Unknown function return type '{}'", other),
+            });
+        }
+        None
+    }
+
+    fn parse_param_class(&self, class: Option<&str>) -> Option<StaticType> {
+        let class = class?;
+
+        // Must end with "-param"
+        if !class.ends_with("-param") {
+            return None;
+        }
+
+        // Strip "-param"
+        let type_part = class.strip_suffix("-param")?;
+
+        match type_part {
+            "integer" => Some(StaticType::Integer),
+            "float"   => Some(StaticType::Double),
+            "string"  => Some(StaticType::String),
+            "boolean" => Some(StaticType::Boolean),
+            "void"    => Some(StaticType::Void),
+
+            _ => None,
+        }
+    }
+
 }
 
 fn operator_to_str(op: LexerTagType) -> &'static str {

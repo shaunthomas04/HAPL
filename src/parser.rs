@@ -198,6 +198,13 @@ impl HaplParser {
                 }
             }
 
+            // -------------------------
+            // Function Call
+            // -------------------------
+            HaplTokenType::OpenFunctionCall { .. } => self.parse_function_call(),
+
+
+
             _ => panic!(
                 "Unexpected token {:?} at position {}",
                 self.current_token(),
@@ -244,13 +251,21 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenLoop { loop_type } if loop_type == LoopType::For => self.parse_for(),
 
+            
+            // -------------------------
+            // Function declaration
+            // -------------------------
+            HaplTokenType::OpenFunction { .. } => self.parse_function(),
+            HaplTokenType::OpenReturn => self.parse_return(),
+
             // Everything else: parse as expression
             HaplTokenType::OpenVarDec { .. } 
             | HaplTokenType::OpenOperator { .. }
             | HaplTokenType::Literal(_)
             | HaplTokenType::OpenVarRef { .. }
             | HaplTokenType::OpenVarAssign { .. } => self.parse_expression(),
-
+            | HaplTokenType::OpenFunctionCall { .. } => self.parse_expression(),
+            
             _ => panic!(
                 "Unexpected token {:?} at top-level position {}",
                 self.current_token(),
@@ -531,6 +546,148 @@ impl HaplParser {
         }
 
         statements
+    }
+
+
+    // --------------------------------------------------
+    // Parse a function
+    // --------------------------------------------------
+    fn parse_function(&mut self) -> Expr {
+        let (name, return_type) = match self.current_token() {
+            HaplTokenType::OpenFunction { name, return_type } => {
+                (name.clone(), return_type)
+            }
+            _ => panic!("Expected OpenFunction"),
+        };
+
+        self.advance(); // consume OpenFunction
+
+        // ------------------------
+        // Parse Params
+        // ------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenParams) {
+            panic!("Expected OpenParams");
+        }
+        self.advance();
+
+        let mut params = Vec::new();
+
+        while !matches!(self.current_token(), HaplTokenType::CloseParams) {
+            match self.current_token() {
+                HaplTokenType::OpenParam { name, param_type } => {
+                    let param_name = name.clone();
+                    let param_type_copy = param_type;
+
+                    self.advance(); // consume OpenParam
+
+                    if !matches!(
+                        self.current_token(),
+                        HaplTokenType::CloseParam { name: ref n } if n == &param_name
+                    ) {
+                        panic!("Parameter '{}' not properly closed", param_name);
+                    }
+
+                    self.advance(); // consume CloseParam
+
+                    params.push((param_name.clone(), param_type_copy));
+                }
+                _ => panic!("Unexpected token in params"),
+            }
+        }
+
+        self.advance(); // consume CloseParams
+
+        // ------------------------
+        // Parse Body
+        // ------------------------
+        if !matches!(self.current_token(), HaplTokenType::OpenFunctionBody) {
+            panic!("Expected OpenFunctionBody");
+        }
+
+        self.advance();
+
+        let mut body = Vec::new();
+
+        while !matches!(self.current_token(), HaplTokenType::CloseFunctionBody) {
+            body.push(self.parse_statement());
+        }
+
+        self.advance(); // consume CloseFunctionBody
+
+        // ------------------------
+        // Close Function
+        // ------------------------
+        if !matches!(
+            self.current_token(),
+            HaplTokenType::CloseFunction { name: ref n } if n == &name
+        ) {
+            panic!("Function '{}' not properly closed", name);
+        }
+
+        self.advance(); // consume CloseFunction
+
+        Expr::FunctionDeclaration {
+            name,
+            return_type,
+            params,
+            body,
+        }
+    }
+
+
+    // --------------------------------------------------
+    // Parse a function call
+    // --------------------------------------------------
+    fn parse_function_call(&mut self) -> Expr {
+        let name = match self.current_token() {
+            HaplTokenType::OpenFunctionCall { name } => name.clone(),
+            _ => panic!("Expected OpenFunctionCall"),
+        };
+
+        self.advance(); // consume OpenFunctionCall
+
+        let mut args = Vec::new();
+
+        if matches!(self.current_token(), HaplTokenType::OpenArgs) {
+            self.advance(); // consume OpenArgs
+
+            while !matches!(self.current_token(), HaplTokenType::CloseArgs) {
+                args.push(self.parse_expression());
+            }
+
+            self.advance(); // consume CloseArgs
+        }
+
+        if !matches!(
+            self.current_token(),
+            HaplTokenType::CloseFunctionCall { name: ref n } if n == &name
+        ) {
+            panic!("Function call '{}' not properly closed", name);
+        }
+
+        self.advance(); // consume CloseFunctionCall
+
+        Expr::FunctionCall { name, args }
+    }
+
+
+    // --------------------------------------------------
+    // Parse a function call
+    // --------------------------------------------------
+    fn parse_return(&mut self) -> Expr {
+        self.advance(); // consume OpenReturn
+
+        let value = self.parse_expression();
+
+        if !matches!(self.current_token(), HaplTokenType::CloseReturn) {
+            panic!("Return not properly closed");
+        }
+
+        self.advance(); // consume CloseReturn
+
+        Expr::Return {
+            value: Some(Box::new(value)),
+        }
     }
 
     // --------------------------------------------------

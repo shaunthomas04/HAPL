@@ -33,25 +33,49 @@ pub enum Expr {
     },
 
     /// Variable reassignment:
-    /// <set id="x">...</set>
+    /// <var id="x">...</var>
     Assignment {
         name: String,
         value: Box<Expr>
     },
 
     /// While loop:
-    /// <while>...</while>
+    /// <div class="while">...</div>
     WhileLoop {
         condition: Box<Expr>,
         body: Vec<Expr>,
     },
 
+    /// For loop:
+    /// <div class="for">...</div>
     ForLoop {
         iterator: String,
         condition: Box<Expr>,
-        increment: Box<Expr>,   // required
+        increment: Box<Expr>,   
         body: Vec<Expr>,
-    }
+    },
+
+    // /// Function declaration:
+    // /// <function id="add">...</function>
+    FunctionDeclaration {
+        name: String,
+        params: Vec<(String, StaticType)>,
+        return_type: StaticType,
+        body: Vec<Expr>,
+    },
+
+    /// Function call:
+    /// <call id="add">...</call>
+    FunctionCall {
+        name: String,
+        args: Vec<Expr>,
+    },
+
+    /// Return statement:
+    /// <return>...</return>
+    Return {
+        value: Option<Box<Expr>>,
+    },
 }
 
 /// Represents a single `if` or `elif` block
@@ -90,11 +114,31 @@ pub enum LiteralValue {
     String(String),
     Boolean(bool)
 }
+impl LiteralValue {
+    pub fn get_type(&self) -> StaticType {
+        match self {
+            LiteralValue::Integer(_) => StaticType::Integer,
+            LiteralValue::Double(_) => StaticType::Double,
+            LiteralValue::String(_) => StaticType::String,
+            LiteralValue::Boolean(_) => StaticType::Boolean,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StaticType {
     Integer,
     Double,
     String,
-    Boolean
+    Boolean,
+    Void,
+}
+
+#[derive(Debug, Clone)]
+pub enum Value {
+    Integer(i64),
+    Double(f64),
+    String(String),
+    Boolean(bool),
+    Void,
 }
