@@ -1,411 +1,410 @@
-// use crate::ast::{Expr, Operator, LiteralValue, StaticType};
-// use std::collections::HashMap;
+use crate::ast::{Expr, Operator, LiteralValue, StaticType};
+use std::collections::HashMap;
 
-// pub struct Interpreter {
-//     runtime_symbol_table: HashMap<String, LiteralValue>,
-// }
+#[derive(Debug, Clone)]
+enum ControlFlow {
+    Value(LiteralValue),
+    Return(LiteralValue),
+}
 
-// impl Interpreter {
-//     pub fn new() -> Self {
-//         Self {
-//             runtime_symbol_table: HashMap::new(),
-//         }
-//     }
+pub struct Interpreter {
+    scopes: Vec<HashMap<String, LiteralValue>>,
+    function_table: HashMap<String, (Vec<(String, StaticType)>, Vec<Expr>)>,
+}
 
-//     pub fn eval(&mut self, expr: &Expr) -> LiteralValue {
-//         match expr {
-//             // -------------------------
-//             // Literal values
-//             // -------------------------
-//             Expr::Literal(lit) => lit.clone(),
+impl Interpreter {
+    pub fn new() -> Self {
+        Self {
+            scopes: vec![HashMap::new()], // global scope
+            function_table: HashMap::new(),
+        }
+    }
 
-//             // -------------------------
-//             // Operations (Arithmetic + Boolean)
-//             // -------------------------
-//             Expr::Operation { op, operands } => {
-//                 // Special case: unary NOT
-//                 if let Operator::Not = op {
-//                     if operands.len() != 1 {
-//                         panic!("'!' operator requires exactly 1 operand");
-//                     }
+    fn push_scope(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
 
-//                     let value = self.eval(&operands[0]);
+    fn pop_scope(&mut self) {
+        self.scopes.pop();
+    }
 
-//                     return match value {
-//                         LiteralValue::Boolean(b) => LiteralValue::Boolean(!b),
-//                         _ => panic!("'!' operator only works on booleans"),
-//                     };
-//                 }
+    fn current_scope(&mut self) -> &mut HashMap<String, LiteralValue> {
+        self.scopes.last_mut().unwrap()
+    }
 
-//                 let mut values: Vec<LiteralValue> =
-//                     operands.iter().map(|e| self.eval(e)).collect();
+    fn lookup(&self, name: &str) -> LiteralValue {
+        for scope in self.scopes.iter().rev() {
+            if let Some(val) = scope.get(name) {
+                return val.clone();
+            }
+        }
+        panic!("Variable '{}' not found", name);
+    }
 
-//                 if values.len() < 2 {
-//                     panic!("Operator requires at least 2 operands");
-//                 }
+    fn assign(&mut self, name: &str, val: LiteralValue) {
+        for scope in self.scopes.iter_mut().rev() {
+            if scope.contains_key(name) {
+                scope.insert(name.to_string(), val);
+                return;
+            }
+        }
+        panic!("Variable '{}' assigned before declaration", name);
+    }
 
-//                 let mut result = values.remove(0);
+    pub fn run(&mut self, program: &[Expr]) {
+        for expr in program {
+            self.eval(expr);
+        }
+    }
 
-//                 for val in values {
-//                     result = Self::apply_operator(op, &result, &val);
-//                 }
+    fn eval(&mut self, expr: &Expr) -> ControlFlow {
+        match expr {
 
-//                 result
-//             }
+            // -------------------------
+            // Literal
+            // -------------------------
+            Expr::Literal(lit) => ControlFlow::Value(lit.clone()),
 
-//             // -------------------------
-//             // Variable declaration
-//             // -------------------------
-//             Expr::VariableDeclaration { name, var_type, value } => {
-//                 let val = self.eval(value);
+            // -------------------------
+            // Variable Reference
+            // -------------------------
+            Expr::VariableReference { name } => {
+                ControlFlow::Value(self.lookup(name))
+            }
 
-//                 match (var_type, &val) {
-//                     (StaticType::Integer, LiteralValue::Integer(_))
-//                     | (StaticType::Double, LiteralValue::Double(_))
-//                     | (StaticType::Boolean, LiteralValue::Boolean(_))
-//                     | (StaticType::String, LiteralValue::String(_)) => {}
-//                     _ => panic!(
-//                         "Type mismatch for variable '{}': declared {:?}, got {:?}",
-//                         name, var_type, val
-//                     ),
-//                 }
+            // -------------------------
+            // Variable Declaration
+            // -------------------------
+            Expr::VariableDeclaration { name, var_type, value } => {
+                let val = match self.eval_value(value) {
+                    Ok(v) => v,
+                    Err(ret) => return ControlFlow::Return(ret),
+                };
 
-//                 if self.runtime_symbol_table.contains_key(name) {
-//                     panic!("Variable '{}' already declared", name);
-//                 }
+                match (var_type, &val) {
+                    (StaticType::Integer, LiteralValue::Integer(_))
+                    | (StaticType::Double,  LiteralValue::Double(_))
+                    | (StaticType::Boolean, LiteralValue::Boolean(_))
+                    | (StaticType::String,  LiteralValue::String(_)) => {}
+                    _ => panic!("Type mismatch in declaration of '{}'", name),
+                }
 
-//                 self.runtime_symbol_table.insert(name.clone(), val.clone());
-//                 val
-//             }
+                self.current_scope().insert(name.clone(), val.clone());
+                ControlFlow::Value(val)
+            }
 
-//             // -------------------------
-//             // Variable assignment
-//             // -------------------------
-//             Expr::Assignment { name, value } => {
-//                 // Evaluate the expression first
-//                 let val = self.eval(value);
+            // -------------------------
+            // Assignment
+            // -------------------------
+            Expr::Assignment { name, value } => {
+                let val = match self.eval_value(value) {
+                    Ok(v) => v,
+                    Err(ret) => return ControlFlow::Return(ret),
+                };
+                
+                self.assign(name, val.clone());
+                ControlFlow::Value(val)
+            }
 
-//                 // Get expected type from symbol table
-//                 let expected_type = self
-//                     .runtime_symbol_table
-//                     .get(name)
-//                     .map(|v| Self::expr_type(v))
-//                     .unwrap_or_else(|| panic!("Variable '{}' assigned before declaration", name));
+            // -------------------------
+            // Operation
+            // -------------------------
+            Expr::Operation { op, operands } => {
+                // Unary NOT
+                if let Operator::Not = op {
+                    let v = match self.eval_value(&operands[0]) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    };
+                    return match v {
+                        LiteralValue::Boolean(b) => ControlFlow::Value(LiteralValue::Boolean(!b)),
+                        _ => panic!("'!' requires a boolean"),
+                    };
+                }
 
-//                 // Get actual type
-//                 let value_type = Self::expr_type(&val);
+                let mut vals = Vec::new();
+                for o in operands {
+                    let v = match self.eval_value(o) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    };
+                    vals.push(v);
+                }
 
-//                 if expected_type != value_type {
-//                     panic!(
-//                         "Type mismatch in assignment to '{}': expected {:?}, got {:?}",
-//                         name, expected_type, value_type
-//                     );
-//                 }
+                let mut result = vals.remove(0);
+                for v in vals {
+                    result = Self::apply_operator(op, &result, &v);
+                }
 
-//                 // Update variable in runtime symbol table
-//                 self.runtime_symbol_table.insert(name.clone(), val.clone());
+                ControlFlow::Value(result)
+            }
 
-//                 val
-//             }
-            
-//             // -------------------------
-//             // Variable reference
-//             // -------------------------
-//             Expr::VariableReference { name } => {
-//                 self.runtime_symbol_table
-//                     .get(name)
-//                     .unwrap_or_else(|| panic!("Variable '{}' used before declaration", name))
-//                     .clone()
-//             }
+            // -------------------------
+            // Print
+            // -------------------------
+            Expr::Print { value } => {
+                let val = match self.eval_value(value) {
+                    Ok(v) => v,
+                    Err(ret) => return ControlFlow::Return(ret),
+                };
+                match &val {
+                    LiteralValue::Integer(n) => println!("{}", n),
+                    LiteralValue::Double(f)  => println!("{}", f),
+                    LiteralValue::String(s)  => println!("{}", s),
+                    LiteralValue::Boolean(b) => println!("{}", b),
+                }
+                ControlFlow::Value(val)
+            }
 
-//             // -------------------------
-//             // Print
-//             // -------------------------
-//             Expr::Print { value } => {
-//                 let val = self.eval(value);
+            // -------------------------
+            // Conditional
+            // -------------------------
+            Expr::Conditional { if_blocks, else_block } => {
+                for block in if_blocks {
+                    let cond = match self.eval_value(&block.condition) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    };
+                    if let LiteralValue::Boolean(true) = cond {
+                        return self.eval_block(&block.statements);
+                    }
+                }
 
-//                 match &val {
-//                     LiteralValue::Integer(n) => println!("{}", n),
-//                     LiteralValue::Double(f) => println!("{}", f),
-//                     LiteralValue::String(s) => println!("{}", s),
-//                     LiteralValue::Boolean(b) => println!("{}", b),
-//                 }
+                if let Some(stmts) = else_block {
+                    return self.eval_block(stmts);
+                }
 
-//                 val
-//             }
+                ControlFlow::Value(LiteralValue::Boolean(false))
+            }
 
-//             // -------------------------
-//             // Conditional statements
-//             // -------------------------
-//             Expr::Conditional { if_blocks, else_block } => {
-//                 for block in if_blocks {
-//                     let cond_value = self.eval(&block.condition);
-//                     match cond_value {
-//                         LiteralValue::Boolean(true) => {
-//                             let mut last_val = LiteralValue::Boolean(true); // placeholder
-//                             for stmt in &block.statements {
-//                                 last_val = self.eval(stmt);
-//                             }
-//                             return last_val; // Stop after first true condition
-//                         }
-//                         LiteralValue::Boolean(false) => continue,
-//                         _ => panic!("Conditional expression must evaluate to a boolean"),
-//                     }
-//                 }
+            // -------------------------
+            // While Loop
+            // -------------------------
+            Expr::WhileLoop { condition, body } => {
+                loop {
+                    let cond = match self.eval_value(condition) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    };
+                    match cond {
+                        LiteralValue::Boolean(true) => {
+                            match self.eval_block(body) {
+                                ControlFlow::Return(v) => return ControlFlow::Return(v),
+                                _ => {}
+                            }
+                        }
+                        LiteralValue::Boolean(false) => break,
+                        _ => panic!("While condition must be boolean"),
+                    }
+                }
+                ControlFlow::Value(LiteralValue::Boolean(false))
+            }
 
-//                 // If no if/elif was true, execute else block if present
-//                 if let Some(stmts) = else_block {
-//                     let mut last_val = LiteralValue::Boolean(true); // placeholder
-//                     for stmt in stmts {
-//                         last_val = self.eval(stmt);
-//                     }
-//                     return last_val;
-//                 }
+            // -------------------------
+            // For Loop
+            // -------------------------
+            Expr::ForLoop { iterator, condition, increment, body } => {
+                // Auto-declare iterator at 0 if not yet in scope
+                if !self.scopes.last().unwrap().contains_key(iterator) {
+                    self.current_scope()
+                        .insert(iterator.clone(), LiteralValue::Integer(0));
+                }
 
-//                 // Default return if nothing executed
-//                 LiteralValue::Boolean(false)
-//             }
-        
-//             // -------------------------
-//             // While loop
-//             // -------------------------
-//             Expr::WhileLoop { condition, body } => {
-//                 let mut last_val = LiteralValue::Boolean(false);
+                loop {
+                    let cond = match self.eval_value(condition) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    };
+                    match cond {
+                        LiteralValue::Boolean(false) => break,
+                        LiteralValue::Boolean(true) => {
+                            match self.eval_block(body) {
+                                ControlFlow::Return(v) => return ControlFlow::Return(v),
+                                _ => {}
+                            }
 
-//                 loop {
-//                     let cond_value = self.eval(condition);
+                            let step = match self.eval_value(increment) {
+                                Ok(v) => v,
+                                Err(ret) => return ControlFlow::Return(ret),
+                            };
+                            let step_n = match step {
+                                LiteralValue::Integer(n) => n,
+                                _ => panic!("For loop increment must be Integer"),
+                            };
 
-//                     match cond_value {
-//                         LiteralValue::Boolean(true) => {
-//                             for stmt in body {
-//                                 last_val = self.eval(stmt);
-//                             }
-//                         }
-//                         LiteralValue::Boolean(false) => break,
-//                         _ => panic!("While condition must evaluate to a boolean"),
-//                     }
-//                 }
-//                 last_val
-//             }
+                            let current = match self.lookup(iterator) {
+                                LiteralValue::Integer(n) => n,
+                                _ => panic!("For loop iterator must be Integer"),
+                            };
 
-//             // -------------------------
-//             // For loop
-//             // -------------------------
-//             Expr::ForLoop {
-//                 iterator,
-//                 condition,
-//                 increment,
-//                 body,
-//             } => {
-//                 let mut last_val = LiteralValue::Boolean(false);
+                            self.assign(iterator, LiteralValue::Integer(current + step_n));
+                        }
+                        _ => panic!("For loop condition must be boolean"),
+                    }
+                }
 
-//                 // If iterator does not exist yet, default to 0
-//                 if !self.runtime_symbol_table.contains_key(iterator) {
-//                     self.runtime_symbol_table
-//                         .insert(iterator.clone(), LiteralValue::Integer(0));
-//                 }
+                ControlFlow::Value(LiteralValue::Boolean(false))
+            }
 
-//                 loop {
-//                     // -------------------------
-//                     // Evaluate condition
-//                     // -------------------------
-//                     let cond_val = self.eval(condition);
+            // -------------------------
+            // Function Declaration
+            // -------------------------
+            Expr::FunctionDeclaration { name, params, body, .. } => {
+                if self.function_table.contains_key(name) {
+                    panic!("Function '{}' already declared", name);
+                }
+                self.function_table
+                    .insert(name.clone(), (params.clone(), body.clone()));
+                ControlFlow::Value(LiteralValue::Boolean(true))
+            }
 
-//                     match cond_val {
-//                         LiteralValue::Boolean(true) => {
-//                             // -------------------------
-//                             // Execute body
-//                             // -------------------------
-//                             for stmt in body {
-//                                 last_val = self.eval(stmt);
-//                             }
+            // -------------------------
+            // Function Call
+            // -------------------------
+            Expr::FunctionCall { name, args } => {
+                let (params, body) = self
+                    .function_table
+                    .get(name)
+                    .unwrap_or_else(|| panic!("Function '{}' not found", name))
+                    .clone();
 
-//                             // -------------------------
-//                             // Evaluate increment
-//                             // -------------------------
-//                             let step_val = self.eval(increment);
+                if params.len() != args.len() {
+                    panic!(
+                        "Function '{}' expects {} args, got {}",
+                        name,
+                        params.len(),
+                        args.len()
+                    );
+                }
 
-//                             let step = match step_val {
-//                                 LiteralValue::Integer(n) => n,
-//                                 _ => panic!("For loop increment must evaluate to Integer"),
-//                             };
+                // Evaluate args BEFORE pushing scope
+                let mut arg_vals = Vec::new();
+                for arg in args {
+                    let val = match self.eval_value(arg) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    };
+                    arg_vals.push(val);
+                }
 
-//                             // -------------------------
-//                             // Update iterator
-//                             // -------------------------
-//                             let current_val = self
-//                                 .runtime_symbol_table
-//                                 .get(iterator)
-//                                 .unwrap_or_else(|| panic!("Iterator '{}' not found", iterator));
+                // New isolated scope for the function
+                self.push_scope();
 
-//                             let current_int = match current_val {
-//                                 LiteralValue::Integer(n) => *n,
-//                                 _ => panic!("For loop iterator '{}' must be Integer", iterator),
-//                             };
+                for ((param_name, _), val) in params.iter().zip(arg_vals) {
+                    self.current_scope().insert(param_name.clone(), val);
+                }
 
-//                             self.runtime_symbol_table.insert(
-//                                 iterator.clone(),
-//                                 LiteralValue::Integer(current_int + step),
-//                             );
-//                         }
+                let ret = match self.eval_block(&body) {
+                    ControlFlow::Return(v) => v,
+                    ControlFlow::Value(v)  => v,
+                };
 
-//                         LiteralValue::Boolean(false) => break,
+                self.pop_scope();
 
-//                         _ => panic!("For loop condition must evaluate to Boolean"),
-//                     }
-//                 }
+                ControlFlow::Value(ret)
+            }
 
-//                 last_val
-//             }
-//         }
-//     }
+            // -------------------------
+            // Return
+            // -------------------------
+            Expr::Return { value } => {
+                let val = match value {
+                    Some(expr) => match self.eval_value(expr) {
+                        Ok(v) => v,
+                        Err(ret) => return ControlFlow::Return(ret),
+                    },
+                    None => LiteralValue::Boolean(false),
+                };
+                ControlFlow::Return(val)
+            }
+        }
+    }
 
-//     fn literal_to_string(val: &LiteralValue) -> String {
-//         match val {
-//             LiteralValue::Integer(n) => n.to_string(),
-//             LiteralValue::Double(f) => f.to_string(),
-//             LiteralValue::String(s) => s.clone(),
-//             LiteralValue::Boolean(b) => b.to_string(),
-//         }
-//     }
+    /// Evaluate a block of statements, propagating Return early
+    fn eval_block(&mut self, stmts: &[Expr]) -> ControlFlow {
+        let mut last = ControlFlow::Value(LiteralValue::Boolean(false));
+        for stmt in stmts {
+            last = self.eval(stmt);
+            if let ControlFlow::Return(_) = &last {
+                return last;
+            }
+        }
+        last
+    }
 
-//     fn apply_operator(
-//         op: &Operator,
-//         lhs: &LiteralValue,
-//         rhs: &LiteralValue,
-//     ) -> LiteralValue {
-//         // ---------------------------------
-//         // BOOLEAN OPERATIONS
-//         // ---------------------------------
-//         match (lhs, rhs) {
-//             (LiteralValue::Boolean(a), LiteralValue::Boolean(b)) => {
-//                 match op {
-//                     Operator::And => return LiteralValue::Boolean(*a && *b),
-//                     Operator::Or  => return LiteralValue::Boolean(*a || *b),
+    /// Evaluate an expression and unwrap its value, propagating Return
+    /// Uses the ? trick via a local Result-like helper
+    fn eval_value(&mut self, expr: &Expr) -> Result<LiteralValue, LiteralValue> {
+        match self.eval(expr) {
+            ControlFlow::Value(v) => Ok(v),
+            ControlFlow::Return(v) => Err(v),
+        }
+    }
 
-//                     Operator::Equal => return LiteralValue::Boolean(a == b),
-//                     Operator::NotEqual => return LiteralValue::Boolean(a != b),
+    fn apply_operator(op: &Operator, lhs: &LiteralValue, rhs: &LiteralValue) -> LiteralValue {
+        match (lhs, rhs) {
+            // Boolean ops
+            (LiteralValue::Boolean(a), LiteralValue::Boolean(b)) => match op {
+                Operator::And      => LiteralValue::Boolean(*a && *b),
+                Operator::Or       => LiteralValue::Boolean(*a || *b),
+                Operator::Equal    => LiteralValue::Boolean(a == b),
+                Operator::NotEqual => LiteralValue::Boolean(a != b),
+                _ => panic!("Invalid operator for booleans"),
+            },
 
-//                     _ => {}
-//                 }
-//             }
-//             _ => {}
-//         }
+            // String concat / compare
+            (LiteralValue::String(a), LiteralValue::String(b)) => match op {
+                Operator::Add      => LiteralValue::String(format!("{}{}", a, b)),
+                Operator::Equal    => LiteralValue::Boolean(a == b),
+                Operator::NotEqual => LiteralValue::Boolean(a != b),
+                _ => panic!("Invalid operator for strings"),
+            },
 
-//         // ---------------------------------
-//         // STRING CONCATENATION (Add only)
-//         // ---------------------------------
-//         if let Operator::Add = op {
-//             match (lhs, rhs) {
-//                 (LiteralValue::String(a), LiteralValue::String(b)) => {
-//                     return LiteralValue::String(format!("{}{}", a, b));
-//                 }
-//                 (LiteralValue::String(a), b) => {
-//                     return LiteralValue::String(format!("{}{}", a, Self::literal_to_string(b)));
-//                 }
-//                 (a, LiteralValue::String(b)) => {
-//                     return LiteralValue::String(format!("{}{}", Self::literal_to_string(a), b));
-//                 }
-//                 _ => {}
-//             }
-//         }
+            // Integer ops
+            (LiteralValue::Integer(a), LiteralValue::Integer(b)) => match op {
+                Operator::Add          => LiteralValue::Integer(a + b),
+                Operator::Subtract     => LiteralValue::Integer(a - b),
+                Operator::Multiply     => LiteralValue::Integer(a * b),
+                Operator::Divide       => {
+                    if *b == 0 { panic!("Division by zero"); }
+                    LiteralValue::Integer(a / b)
+                }
+                Operator::Equal        => LiteralValue::Boolean(a == b),
+                Operator::NotEqual     => LiteralValue::Boolean(a != b),
+                Operator::Less         => LiteralValue::Boolean(a < b),
+                Operator::LessEqual    => LiteralValue::Boolean(a <= b),
+                Operator::Greater      => LiteralValue::Boolean(a > b),
+                Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+                _ => panic!("Invalid operator for integers"),
+            },
 
-//         // ---------------------------------
-//         // STRING COMPARISON
-//         // ---------------------------------
-//         match (lhs, rhs) {
-//             (LiteralValue::String(a), LiteralValue::String(b)) => match op {
-//                 Operator::Equal => return LiteralValue::Boolean(a == b),
-//                 Operator::NotEqual => return LiteralValue::Boolean(a != b),
-//                 _ => {}
-//             },
-//             _ => {}
-//         }
+            // Double ops
+            (LiteralValue::Double(a), LiteralValue::Double(b)) => match op {
+                Operator::Add          => LiteralValue::Double(a + b),
+                Operator::Subtract     => LiteralValue::Double(a - b),
+                Operator::Multiply     => LiteralValue::Double(a * b),
+                Operator::Divide       => {
+                    if *b == 0.0 { panic!("Division by zero"); }
+                    LiteralValue::Double(a / b)
+                }
+                Operator::Equal        => LiteralValue::Boolean(a == b),
+                Operator::NotEqual     => LiteralValue::Boolean(a != b),
+                Operator::Less         => LiteralValue::Boolean(a < b),
+                Operator::LessEqual    => LiteralValue::Boolean(a <= b),
+                Operator::Greater      => LiteralValue::Boolean(a > b),
+                Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+                _ => panic!("Invalid operator for doubles"),
+            },
 
-//         // ---------------------------------
-//         // NUMERIC OPERATIONS
-//         // ---------------------------------
-//         match (lhs, rhs) {
-//             (LiteralValue::Integer(a), LiteralValue::Integer(b)) => match op {
-//                 Operator::Add => LiteralValue::Integer(a + b),
-//                 Operator::Subtract => LiteralValue::Integer(a - b),
-//                 Operator::Multiply => LiteralValue::Integer(a * b),
-//                 Operator::Divide => {
-//                     if *b == 0 {
-//                         panic!("Division by zero");
-//                     }
-//                     LiteralValue::Integer(a / b)
-//                 }
-//                 Operator::Equal => LiteralValue::Boolean(a == b),
-//                 Operator::NotEqual => LiteralValue::Boolean(a != b),
-//                 Operator::Less => LiteralValue::Boolean(a < b),
-//                 Operator::LessEqual => LiteralValue::Boolean(a <= b),
-//                 Operator::Greater => LiteralValue::Boolean(a > b),
-//                 Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
+            // Mixed numeric: promote to double
+            (LiteralValue::Integer(a), LiteralValue::Double(b)) => {
+                Self::apply_operator(op, &LiteralValue::Double(*a as f64), rhs)
+            }
+            (LiteralValue::Double(_), LiteralValue::Integer(b)) => {
+                Self::apply_operator(op, lhs, &LiteralValue::Double(*b as f64))
+            }
 
-//                 _ => panic!("Invalid operator for integers"),
-//             },
-
-//             (LiteralValue::Double(a), LiteralValue::Double(b)) => match op {
-//                 Operator::Add => LiteralValue::Double(a + b),
-//                 Operator::Subtract => LiteralValue::Double(a - b),
-//                 Operator::Multiply => LiteralValue::Double(a * b),
-//                 Operator::Divide => {
-//                     if *b == 0.0 {
-//                         panic!("Division by zero");
-//                     }
-//                     LiteralValue::Double(a / b)
-//                 }
-//                 Operator::Equal => LiteralValue::Boolean(a == b),
-//                 Operator::NotEqual => LiteralValue::Boolean(a != b),
-//                 Operator::Less => LiteralValue::Boolean(a < b),
-//                 Operator::LessEqual => LiteralValue::Boolean(a <= b),
-//                 Operator::Greater => LiteralValue::Boolean(a > b),
-//                 Operator::GreaterEqual => LiteralValue::Boolean(a >= b),
-
-//                 _ => panic!("Invalid operator for doubles"),
-//             },
-
-//             // Mixed numeric → promote to double
-//             (LiteralValue::Integer(a), LiteralValue::Double(b)) => match op {
-//                 Operator::Add => LiteralValue::Double(*a as f64 + b),
-//                 Operator::Subtract => LiteralValue::Double(*a as f64 - b),
-//                 Operator::Multiply => LiteralValue::Double(*a as f64 * b),
-//                 Operator::Divide => LiteralValue::Double(*a as f64 / b),
-//                 Operator::Equal => LiteralValue::Boolean((*a as f64) == *b),
-//                 Operator::NotEqual => LiteralValue::Boolean((*a as f64) != *b),
-//                 Operator::Less => LiteralValue::Boolean((*a as f64) < *b),
-//                 Operator::LessEqual => LiteralValue::Boolean((*a as f64) <= *b),
-//                 Operator::Greater => LiteralValue::Boolean((*a as f64) > *b),
-//                 Operator::GreaterEqual => LiteralValue::Boolean((*a as f64) >= *b),
-//                 _ => panic!("Invalid operator for numeric types"),
-//             },
-
-//             (LiteralValue::Double(a), LiteralValue::Integer(b)) => match op {
-//                 Operator::Add => LiteralValue::Double(a + *b as f64),
-//                 Operator::Subtract => LiteralValue::Double(a - *b as f64),
-//                 Operator::Multiply => LiteralValue::Double(a * *b as f64),
-//                 Operator::Divide => LiteralValue::Double(a / *b as f64),
-//                 Operator::Equal => LiteralValue::Boolean((*b as f64) == *a),
-//                 Operator::NotEqual => LiteralValue::Boolean((*b as f64) != *a),
-//                 Operator::Less => LiteralValue::Boolean((*b as f64) < *a),
-//                 Operator::LessEqual => LiteralValue::Boolean((*b as f64) <= *a),
-//                 Operator::Greater => LiteralValue::Boolean((*b as f64) > *a),
-//                 Operator::GreaterEqual => LiteralValue::Boolean((*b as f64) >= *a),
-//                 _ => panic!("Invalid operator for numeric types"),
-//             },
-
-//             _ => panic!("Invalid operand types for operator {:?}", op),
-//         }
-//     }
-
-//     // Helper: get the static type of a LiteralValue
-//     fn expr_type(val: &LiteralValue) -> StaticType {
-//         match val {
-//             LiteralValue::Integer(_) => StaticType::Integer,
-//             LiteralValue::Double(_) => StaticType::Double,
-//             LiteralValue::String(_) => StaticType::String,
-//             LiteralValue::Boolean(_) => StaticType::Boolean,
-//         }
-//     }
-// }
+            _ => panic!("Unsupported operand types for {:?}", op),
+        }
+    }
+}
