@@ -15,7 +15,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            scopes: vec![HashMap::new()], // global scope
+            scopes: vec![HashMap::new()],
             function_table: HashMap::new(),
         }
     }
@@ -25,7 +25,9 @@ impl Interpreter {
     }
 
     fn pop_scope(&mut self) {
-        self.scopes.pop();
+        if self.scopes.len() > 1 {
+            self.scopes.pop();
+        }
     }
 
     fn current_scope(&mut self) -> &mut HashMap<String, LiteralValue> {
@@ -77,7 +79,7 @@ impl Interpreter {
             // -------------------------
             Expr::VariableDeclaration { name, var_type, value } => {
                 let val = match self.eval_value(value) {
-                    Ok(v) => v,
+                    Ok(v)   => v,
                     Err(ret) => return ControlFlow::Return(ret),
                 };
 
@@ -98,10 +100,10 @@ impl Interpreter {
             // -------------------------
             Expr::Assignment { name, value } => {
                 let val = match self.eval_value(value) {
-                    Ok(v) => v,
+                    Ok(v)    => v,
                     Err(ret) => return ControlFlow::Return(ret),
                 };
-                
+
                 self.assign(name, val.clone());
                 ControlFlow::Value(val)
             }
@@ -113,19 +115,19 @@ impl Interpreter {
                 // Unary NOT
                 if let Operator::Not = op {
                     let v = match self.eval_value(&operands[0]) {
-                        Ok(v) => v,
+                        Ok(v)    => v,
                         Err(ret) => return ControlFlow::Return(ret),
                     };
                     return match v {
                         LiteralValue::Boolean(b) => ControlFlow::Value(LiteralValue::Boolean(!b)),
-                        _ => panic!("'!' requires a boolean"),
+                        _ => panic!("'not' requires a boolean"),
                     };
                 }
 
                 let mut vals = Vec::new();
                 for o in operands {
                     let v = match self.eval_value(o) {
-                        Ok(v) => v,
+                        Ok(v)    => v,
                         Err(ret) => return ControlFlow::Return(ret),
                     };
                     vals.push(v);
@@ -144,7 +146,7 @@ impl Interpreter {
             // -------------------------
             Expr::Print { value } => {
                 let val = match self.eval_value(value) {
-                    Ok(v) => v,
+                    Ok(v)    => v,
                     Err(ret) => return ControlFlow::Return(ret),
                 };
                 match &val {
@@ -162,16 +164,22 @@ impl Interpreter {
             Expr::Conditional { if_blocks, else_block } => {
                 for block in if_blocks {
                     let cond = match self.eval_value(&block.condition) {
-                        Ok(v) => v,
+                        Ok(v)    => v,
                         Err(ret) => return ControlFlow::Return(ret),
                     };
                     if let LiteralValue::Boolean(true) = cond {
-                        return self.eval_block(&block.statements);
+                        self.push_scope();
+                        let result = self.eval_block(&block.statements);
+                        self.pop_scope();
+                        return result;
                     }
                 }
 
                 if let Some(stmts) = else_block {
-                    return self.eval_block(stmts);
+                    self.push_scope();
+                    let result = self.eval_block(stmts);
+                    self.pop_scope();
+                    return result;
                 }
 
                 ControlFlow::Value(LiteralValue::Boolean(false))
@@ -183,14 +191,16 @@ impl Interpreter {
             Expr::WhileLoop { condition, body } => {
                 loop {
                     let cond = match self.eval_value(condition) {
-                        Ok(v) => v,
+                        Ok(v)    => v,
                         Err(ret) => return ControlFlow::Return(ret),
                     };
                     match cond {
                         LiteralValue::Boolean(true) => {
-                            match self.eval_block(body) {
-                                ControlFlow::Return(v) => return ControlFlow::Return(v),
-                                _ => {}
+                            self.push_scope();
+                            let result = self.eval_block(body);
+                            self.pop_scope();
+                            if let ControlFlow::Return(v) = result {
+                                return ControlFlow::Return(v);
                             }
                         }
                         LiteralValue::Boolean(false) => break,
@@ -204,28 +214,43 @@ impl Interpreter {
             // For Loop
             // -------------------------
             Expr::ForLoop { iterator, condition, increment, body } => {
-                // Auto-declare iterator at 0 if not yet in scope
-                if !self.scopes.last().unwrap().contains_key(iterator) {
-                    self.current_scope()
-                        .insert(iterator.clone(), LiteralValue::Integer(0));
-                }
+                // FIX: Push a dedicated scope for the for loop so that the iterator
+                // variable is contained and does not leak into the surrounding scope
+                // after the loop completes.
+                self.push_scope();
+
+                // Auto-declare iterator at 0 inside the loop's own scope
+                self.current_scope()
+                    .insert(iterator.clone(), LiteralValue::Integer(0));
 
                 loop {
                     let cond = match self.eval_value(condition) {
-                        Ok(v) => v,
-                        Err(ret) => return ControlFlow::Return(ret),
+                        Ok(v)    => v,
+                        Err(ret) => {
+                            self.pop_scope();
+                            return ControlFlow::Return(ret);
+                        }
                     };
                     match cond {
                         LiteralValue::Boolean(false) => break,
                         LiteralValue::Boolean(true) => {
-                            match self.eval_block(body) {
-                                ControlFlow::Return(v) => return ControlFlow::Return(v),
-                                _ => {}
+                            // Body gets its own inner scope
+                            self.push_scope();
+                            let result = self.eval_block(body);
+                            self.pop_scope();
+
+                            if let ControlFlow::Return(v) = result {
+                                self.pop_scope(); // pop loop scope before returning
+                                return ControlFlow::Return(v);
                             }
 
+                            // Apply increment to the iterator
                             let step = match self.eval_value(increment) {
-                                Ok(v) => v,
-                                Err(ret) => return ControlFlow::Return(ret),
+                                Ok(v)    => v,
+                                Err(ret) => {
+                                    self.pop_scope();
+                                    return ControlFlow::Return(ret);
+                                }
                             };
                             let step_n = match step {
                                 LiteralValue::Integer(n) => n,
@@ -242,6 +267,9 @@ impl Interpreter {
                         _ => panic!("For loop condition must be boolean"),
                     }
                 }
+
+                // Pop the for loop's scope — iterator is now gone
+                self.pop_scope();
 
                 ControlFlow::Value(LiteralValue::Boolean(false))
             }
@@ -277,11 +305,11 @@ impl Interpreter {
                     );
                 }
 
-                // Evaluate args BEFORE pushing scope
+                // Evaluate args BEFORE pushing the new scope
                 let mut arg_vals = Vec::new();
                 for arg in args {
                     let val = match self.eval_value(arg) {
-                        Ok(v) => v,
+                        Ok(v)    => v,
                         Err(ret) => return ControlFlow::Return(ret),
                     };
                     arg_vals.push(val);
@@ -310,7 +338,7 @@ impl Interpreter {
             Expr::Return { value } => {
                 let val = match value {
                     Some(expr) => match self.eval_value(expr) {
-                        Ok(v) => v,
+                        Ok(v)    => v,
                         Err(ret) => return ControlFlow::Return(ret),
                     },
                     None => LiteralValue::Boolean(false),
@@ -320,7 +348,7 @@ impl Interpreter {
         }
     }
 
-    /// Evaluate a block of statements, propagating Return early
+    /// Evaluate a block of statements, propagating Return early.
     fn eval_block(&mut self, stmts: &[Expr]) -> ControlFlow {
         let mut last = ControlFlow::Value(LiteralValue::Boolean(false));
         for stmt in stmts {
@@ -332,11 +360,10 @@ impl Interpreter {
         last
     }
 
-    /// Evaluate an expression and unwrap its value, propagating Return
-    /// Uses the ? trick via a local Result-like helper
+    /// Evaluate an expression and unwrap its value, propagating Return via Err.
     fn eval_value(&mut self, expr: &Expr) -> Result<LiteralValue, LiteralValue> {
         match self.eval(expr) {
-            ControlFlow::Value(v) => Ok(v),
+            ControlFlow::Value(v)  => Ok(v),
             ControlFlow::Return(v) => Err(v),
         }
     }
@@ -396,8 +423,8 @@ impl Interpreter {
                 _ => panic!("Invalid operator for doubles"),
             },
 
-            // Mixed numeric: promote to double
-            (LiteralValue::Integer(a), LiteralValue::Double(b)) => {
+            // Mixed numeric: normalize both sides to Double, then recurse once
+            (LiteralValue::Integer(a), LiteralValue::Double(_)) => {
                 Self::apply_operator(op, &LiteralValue::Double(*a as f64), rhs)
             }
             (LiteralValue::Double(_), LiteralValue::Integer(b)) => {
