@@ -5,7 +5,10 @@ use std::collections::HashMap;
 pub struct HaplParser {
     tokens: Vec<HaplToken>,
     position: usize,
-    symbol_table: HashMap<String, StaticType>, // tracks declared variables
+    // Scope stack mirrors the interpreter's scopes so that:
+    // - nested scopes (functions, loops, conditionals) don't pollute outer scopes
+    // - shadowing is allowed inside inner scopes
+    scope_stack: Vec<HashMap<String, StaticType>>,
 }
 
 impl HaplParser {
@@ -13,8 +16,44 @@ impl HaplParser {
         Self {
             tokens,
             position: 0,
-            symbol_table: HashMap::new(),
+            scope_stack: vec![HashMap::new()], // global scope
         }
+    }
+
+    // --------------------------------------------------
+    // Scope helpers
+    // --------------------------------------------------
+
+    fn push_scope(&mut self) {
+        self.scope_stack.push(HashMap::new());
+    }
+
+    fn pop_scope(&mut self) {
+        if self.scope_stack.len() > 1 {
+            self.scope_stack.pop();
+        }
+    }
+
+    fn declare_var(&mut self, name: String, var_type: StaticType) {
+        // Only check the *current* scope for duplicates; shadowing outer scopes is fine.
+        let current = self.scope_stack.last_mut().unwrap();
+        if current.contains_key(&name) {
+            panic!("Variable '{}' already declared in this scope", name);
+        }
+        current.insert(name, var_type);
+    }
+
+    fn lookup_var(&self, name: &str) -> Option<StaticType> {
+        for scope in self.scope_stack.iter().rev() {
+            if let Some(t) = scope.get(name) {
+                return Some(*t);
+            }
+        }
+        None
+    }
+
+    fn var_exists(&self, name: &str) -> bool {
+        self.lookup_var(name).is_some()
     }
 
     // --------------------------------------------------
@@ -95,14 +134,10 @@ impl HaplParser {
 
                 self.advance(); // consume CloseVarDec
 
-                if self.symbol_table.contains_key(&var_name) {
-                    panic!("Variable '{}' already declared", var_name);
-                }
+                // Register in current scope (allows shadowing in inner scopes)
+                self.declare_var(var_name.clone(), var_type_copy);
 
-                // Insert into symbol table
-                self.symbol_table.insert(var_name.clone(), var_type_copy);
-
-                // Type-check **only literals** at parse time
+                // Type-check literals at parse time
                 match &*value_expr {
                     Expr::Literal(lit_val) => {
                         match (var_type_copy, lit_val) {
@@ -117,8 +152,7 @@ impl HaplParser {
                         }
                     }
                     _ => {
-                        // Allow non-literal expressions (arithmetic or variables) to be declared
-                        // Type will be checked at runtime during evaluation
+                        // Non-literal expressions are type-checked at runtime
                     }
                 }
 
@@ -137,7 +171,7 @@ impl HaplParser {
 
                 self.advance(); // consume OpenVarRef
 
-                if !self.symbol_table.contains_key(&var_name) {
+                if !self.var_exists(&var_name) {
                     panic!("Variable '{}' used before declaration", var_name);
                 }
 
@@ -150,7 +184,6 @@ impl HaplParser {
                 Expr::VariableReference { name: var_name }
             }
 
-           
             // -------------------------
             // Variable Assignment
             // -------------------------
@@ -159,15 +192,15 @@ impl HaplParser {
 
                 self.advance(); // consume OpenVarAssign
 
-                // Variable must already exist
-                let expected_type = match self.symbol_table.get(&var_name) {
-                    Some(t) => *t,
+                // Variable must already exist (search all scopes)
+                let expected_type = match self.lookup_var(&var_name) {
+                    Some(t) => t,
                     None => panic!("Variable '{}' assigned before declaration", var_name),
                 };
 
                 let value_expr = Box::new(self.parse_expression());
 
-                // If literal, check immediately
+                // If literal, type-check immediately
                 if let Expr::Literal(lit_val) = &*value_expr {
                     match (expected_type, lit_val) {
                         (StaticType::Integer, LiteralValue::Integer(_))
@@ -180,8 +213,6 @@ impl HaplParser {
                         ),
                     }
                 }
-
-                // let value_expr = Box::new(self.parse_expression());
 
                 if self.is_at_end() || !matches!(
                     self.current_token(),
@@ -203,8 +234,6 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenFunctionCall { .. } => self.parse_function_call(),
 
-
-
             _ => panic!(
                 "Unexpected token {:?} at position {}",
                 self.current_token(),
@@ -224,10 +253,8 @@ impl HaplParser {
             HaplTokenType::OpenPrint { .. } => {
                 self.advance(); // consume <p>
 
-                // Parse the expression inside the print
                 let inner_expr = self.parse_expression();
 
-                // Ensure the print is properly closed
                 if self.is_at_end() || !matches!(self.current_token(), HaplTokenType::ClosePrint { .. }) {
                     panic!("Print statement not properly closed with </p>");
                 }
@@ -251,7 +278,6 @@ impl HaplParser {
             // -------------------------
             HaplTokenType::OpenLoop { loop_type } if loop_type == LoopType::For => self.parse_for(),
 
-            
             // -------------------------
             // Function declaration
             // -------------------------
@@ -259,13 +285,22 @@ impl HaplParser {
             HaplTokenType::OpenReturn => self.parse_return(),
 
             // Everything else: parse as expression
-            HaplTokenType::OpenVarDec { .. } 
+            HaplTokenType::OpenVarDec { .. }
             | HaplTokenType::OpenOperator { .. }
             | HaplTokenType::Literal(_)
             | HaplTokenType::OpenVarRef { .. }
-            | HaplTokenType::OpenVarAssign { .. } => self.parse_expression(),
+            | HaplTokenType::OpenVarAssign { .. }
             | HaplTokenType::OpenFunctionCall { .. } => self.parse_expression(),
-            
+
+            // Structural HTML wrapper tokens (html, head, body, title, meta, link)
+            // are emitted by the lexer so HAPL can live inside real HTML files.
+            // The parser simply skips them and continues parsing.
+            HaplTokenType::OpenHtmlTag { .. } | HaplTokenType::CloseHtmlTag { .. } => {
+                self.advance();
+                // Return a no-op so parse_program can continue; use a dummy literal
+                Expr::Literal(LiteralValue::Boolean(false))
+            }
+
             _ => panic!(
                 "Unexpected token {:?} at top-level position {}",
                 self.current_token(),
@@ -307,45 +342,53 @@ impl HaplParser {
         Expr::Conditional { if_blocks, else_block }
     }
 
-    fn parse_conditional_block(&mut self, open: HaplTokenType, close: HaplTokenType) -> ConditionalBlock {
+    // FIX: Parse condition explicitly first, then parse body statements separately.
+    // Previously the condition was assumed to be `statements.remove(0)` which
+    // would panic on an empty block and was semantically fragile.
+    fn parse_conditional_block(&mut self, _open: HaplTokenType, close: HaplTokenType) -> ConditionalBlock {
         self.advance(); // consume OpenIf or OpenElif
 
+        self.push_scope();
+
+        // The first expression inside the block is always the condition
+        let condition = self.parse_expression();
+
+        // Remaining statements form the body
         let mut statements = Vec::new();
         while !self.is_at_end() {
-            match self.current_token() {
-                // Check if we reached the closing token
-                HaplTokenType::CloseIf if matches!(close, HaplTokenType::CloseIf) => break,
-                HaplTokenType::CloseElif if matches!(close, HaplTokenType::CloseElif) => break,
-                _ => statements.push(self.parse_statement()),
-            }
+            let at_close = match &close {
+                HaplTokenType::CloseIf   => matches!(self.current_token(), HaplTokenType::CloseIf),
+                HaplTokenType::CloseElif => matches!(self.current_token(), HaplTokenType::CloseElif),
+                _ => false,
+            };
+            if at_close { break; }
+            statements.push(self.parse_statement());
         }
 
+        self.pop_scope();
         self.advance(); // consume CloseIf or CloseElif
-
-        // First statement inside the block is the condition
-        let condition = statements.remove(0);
 
         ConditionalBlock { condition, statements }
     }
 
     fn parse_else_block(&mut self) -> Vec<Expr> {
         self.advance(); // consume OpenElse
-        let mut statements = Vec::new();
+        self.push_scope();
 
+        let mut statements = Vec::new();
         while !matches!(self.current_token(), HaplTokenType::CloseElse) {
             statements.push(self.parse_statement());
         }
 
+        self.pop_scope();
         self.advance(); // consume CloseElse
         statements
     }
-
 
     // --------------------------------------------------
     // Parse while loop
     // --------------------------------------------------
     fn parse_while(&mut self) -> Expr {
-        // Expect OpenLoop with type While
         if let HaplTokenType::OpenLoop { loop_type } = self.current_token() {
             if loop_type != LoopType::While {
                 panic!("Expected a while loop but found {:?}", self.current_token());
@@ -356,9 +399,7 @@ impl HaplParser {
 
         self.advance(); // consume OpenLoop
 
-        // ----------------------------
         // Parse condition
-        // ----------------------------
         if !matches!(self.current_token(), HaplTokenType::OpenLoopCondition) {
             panic!("Expected <loop_condition> but found {:?}", self.current_token());
         }
@@ -371,24 +412,22 @@ impl HaplParser {
         }
         self.advance(); // consume CloseLoopCondition
 
-        // ----------------------------
-        // Parse body
-        // ----------------------------
+        // Parse body (own scope)
         if !matches!(self.current_token(), HaplTokenType::OpenLoopBody) {
             panic!("Expected <loop_body> but found {:?}", self.current_token());
         }
         self.advance(); // consume OpenLoopBody
 
+        self.push_scope();
         let mut body_statements = Vec::new();
         while !matches!(self.current_token(), HaplTokenType::CloseLoopBody) {
             body_statements.push(self.parse_statement());
         }
+        self.pop_scope();
 
         self.advance(); // consume CloseLoopBody
 
-        // ----------------------------
         // Close loop
-        // ----------------------------
         if let HaplTokenType::CloseLoop { loop_type } = self.current_token() {
             if loop_type != LoopType::While {
                 panic!("Expected CloseLoop(While) but found {:?}", self.current_token());
@@ -404,14 +443,10 @@ impl HaplParser {
         }
     }
 
-    
     // --------------------------------------------------
     // Parse for loop
     // --------------------------------------------------
     fn parse_for(&mut self) -> Expr {
-        // ----------------------------------
-        // Ensure current token is OpenLoop(For)
-        // ----------------------------------
         if let HaplTokenType::OpenLoop { loop_type } = self.current_token() {
             if loop_type != LoopType::For {
                 panic!("Expected a for loop but found {:?}", self.current_token());
@@ -422,9 +457,11 @@ impl HaplParser {
 
         self.advance(); // consume OpenLoop
 
-        // ==================================
+        // FIX: Push a scope for the for loop so the iterator variable is scoped
+        // to the loop and doesn't leak into the surrounding parser scope.
+        self.push_scope();
+
         // Parse Iterator
-        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopIterator) {
             panic!("Expected <iterator> but found {:?}", self.current_token());
         }
@@ -437,15 +474,17 @@ impl HaplParser {
             _ => panic!("For loop iterator must be a variable reference"),
         };
 
-        // Auto-declare iterator if not already declared
-        if !self.symbol_table.contains_key(&iterator_name) {
-            self.symbol_table.insert(iterator_name.clone(), StaticType::Integer);
+        // Auto-declare iterator in the loop's own scope if not already there
+        if self.scope_stack.last().map_or(true, |s| !s.contains_key(&iterator_name)) {
+            self.declare_var(iterator_name.clone(), StaticType::Integer);
         }
 
         // Enforce iterator is Integer
-        let iterator_type = self.symbol_table.get(&iterator_name).unwrap();
-        if *iterator_type != StaticType::Integer {
-            panic!("For loop iterator '{}' must be Integer", iterator_name);
+        match self.lookup_var(&iterator_name) {
+            Some(t) if t != StaticType::Integer => {
+                panic!("For loop iterator '{}' must be Integer", iterator_name);
+            }
+            _ => {}
         }
 
         if !matches!(self.current_token(), HaplTokenType::CloseLoopIterator) {
@@ -453,9 +492,7 @@ impl HaplParser {
         }
         self.advance(); // consume CloseLoopIterator
 
-        // ==================================
         // Parse Condition
-        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopCondition) {
             panic!("Expected <condition> but found {:?}", self.current_token());
         }
@@ -463,7 +500,7 @@ impl HaplParser {
 
         let condition_expr = self.parse_expression();
 
-        // Enforce Boolean condition (basic static check for literals/operators)
+        // FIX: infer_type is now type-aware for arithmetic so this check is more accurate
         if let Some(cond_type) = self.infer_type(&condition_expr) {
             if cond_type != StaticType::Boolean {
                 panic!("For loop condition must evaluate to Boolean");
@@ -475,9 +512,7 @@ impl HaplParser {
         }
         self.advance(); // consume CloseLoopCondition
 
-        // ==================================
         // Parse Increment
-        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopIncrement) {
             panic!("Expected <increment> but found {:?}", self.current_token());
         }
@@ -485,7 +520,6 @@ impl HaplParser {
 
         let increment_expr = self.parse_expression();
 
-        // Enforce Integer increment
         if let Some(inc_type) = self.infer_type(&increment_expr) {
             if inc_type != StaticType::Integer {
                 panic!("For loop increment must evaluate to Integer");
@@ -497,9 +531,7 @@ impl HaplParser {
         }
         self.advance(); // consume CloseLoopIncrement
 
-        // ==================================
         // Parse Body
-        // ==================================
         if !matches!(self.current_token(), HaplTokenType::OpenLoopBody) {
             panic!("Expected <body> but found {:?}", self.current_token());
         }
@@ -512,9 +544,10 @@ impl HaplParser {
 
         self.advance(); // consume CloseLoopBody
 
-        // ==================================
+        // Pop the for loop's scope (iterator no longer visible)
+        self.pop_scope();
+
         // Close Loop
-        // ==================================
         if let HaplTokenType::CloseLoop { loop_type } = self.current_token() {
             if loop_type != LoopType::For {
                 panic!("Expected CloseLoop(For) but found {:?}", self.current_token());
@@ -524,9 +557,6 @@ impl HaplParser {
         }
         self.advance(); // consume CloseLoop
 
-        // ==================================
-        // Build AST Node
-        // ==================================
         Expr::ForLoop {
             iterator: iterator_name,
             condition: Box::new(condition_expr),
@@ -548,9 +578,8 @@ impl HaplParser {
         statements
     }
 
-
     // --------------------------------------------------
-    // Parse a function
+    // Parse a function declaration
     // --------------------------------------------------
     fn parse_function(&mut self) -> Expr {
         let (name, return_type) = match self.current_token() {
@@ -562,9 +591,7 @@ impl HaplParser {
 
         self.advance(); // consume OpenFunction
 
-        // ------------------------
         // Parse Params
-        // ------------------------
         if !matches!(self.current_token(), HaplTokenType::OpenParams) {
             panic!("Expected OpenParams");
         }
@@ -597,26 +624,30 @@ impl HaplParser {
 
         self.advance(); // consume CloseParams
 
-        // ------------------------
-        // Parse Body
-        // ------------------------
+        // Parse Body — push an isolated scope for the function
         if !matches!(self.current_token(), HaplTokenType::OpenFunctionBody) {
             panic!("Expected OpenFunctionBody");
         }
-
         self.advance();
 
-        let mut body = Vec::new();
+        // FIX: Use an isolated scope for the function body so that variables
+        // declared inside the function don't pollute the global parser scope.
+        self.push_scope();
 
+        // Pre-declare params inside the function scope
+        for (param_name, param_type) in &params {
+            self.declare_var(param_name.clone(), *param_type);
+        }
+
+        let mut body = Vec::new();
         while !matches!(self.current_token(), HaplTokenType::CloseFunctionBody) {
             body.push(self.parse_statement());
         }
 
+        self.pop_scope();
         self.advance(); // consume CloseFunctionBody
 
-        // ------------------------
         // Close Function
-        // ------------------------
         if !matches!(
             self.current_token(),
             HaplTokenType::CloseFunction { name: ref n } if n == &name
@@ -633,7 +664,6 @@ impl HaplParser {
             body,
         }
     }
-
 
     // --------------------------------------------------
     // Parse a function call
@@ -670,9 +700,8 @@ impl HaplParser {
         Expr::FunctionCall { name, args }
     }
 
-
     // --------------------------------------------------
-    // Parse a function call
+    // Parse a return statement
     // --------------------------------------------------
     fn parse_return(&mut self) -> Expr {
         self.advance(); // consume OpenReturn
@@ -698,7 +727,6 @@ impl HaplParser {
         if self.is_at_end() {
             panic!("Tried to access token beyond end of stream");
         }
-
         self.tokens[self.position].token_type.clone()
     }
 
@@ -716,7 +744,6 @@ impl HaplParser {
         if self.is_at_end() {
             return false;
         }
-
         match self.current_token() {
             HaplTokenType::CloseOperator { name } => name == expected,
             _ => false,
@@ -727,11 +754,8 @@ impl HaplParser {
         if self.is_at_end() {
             return false;
         }
-
         match self.current_token() {
-            HaplTokenType::CloseVarDec { var_type: t, name: n } => {
-                t == var_type && n == name
-            }
+            HaplTokenType::CloseVarDec { var_type: t, name: n } => t == var_type && n == name,
             _ => false,
         }
     }
@@ -740,7 +764,6 @@ impl HaplParser {
         if self.is_at_end() {
             return false;
         }
-
         match self.current_token() {
             HaplTokenType::CloseVarRef { name: n } => n == name,
             _ => false,
@@ -749,35 +772,36 @@ impl HaplParser {
 
     fn map_operator(&self, op: LexerTagType) -> Operator {
         match op {
-            LexerTagType::Add => Operator::Add,
-            LexerTagType::Subtract => Operator::Subtract,
-            LexerTagType::Multiply => Operator::Multiply,
-            LexerTagType::Divide => Operator::Divide,
-            LexerTagType::And => Operator::And,
-            LexerTagType::Or => Operator::Or,
-            LexerTagType::Not => Operator::Not,
-            LexerTagType::Equal => Operator::Equal,
-            LexerTagType::NotEqual => Operator::NotEqual,
-            LexerTagType::Less => Operator::Less,
-            LexerTagType::LessEqual => Operator::LessEqual,
-            LexerTagType::Greater => Operator::Greater,
+            LexerTagType::Add          => Operator::Add,
+            LexerTagType::Subtract     => Operator::Subtract,
+            LexerTagType::Multiply     => Operator::Multiply,
+            LexerTagType::Divide       => Operator::Divide,
+            LexerTagType::And          => Operator::And,
+            LexerTagType::Or           => Operator::Or,
+            LexerTagType::Not          => Operator::Not,
+            LexerTagType::Equal        => Operator::Equal,
+            LexerTagType::NotEqual     => Operator::NotEqual,
+            LexerTagType::Less         => Operator::Less,
+            LexerTagType::LessEqual    => Operator::LessEqual,
+            LexerTagType::Greater      => Operator::Greater,
             LexerTagType::GreaterEqual => Operator::GreaterEqual,
         }
     }
 
+    // FIX: infer_type now inspects operands to determine the actual output type
+    // of arithmetic operations instead of blindly returning Integer.
     fn infer_type(&self, expr: &Expr) -> Option<StaticType> {
         match expr {
             Expr::Literal(LiteralValue::Integer(_)) => Some(StaticType::Integer),
-            Expr::Literal(LiteralValue::Double(_)) => Some(StaticType::Double),
-            Expr::Literal(LiteralValue::String(_)) => Some(StaticType::String),
+            Expr::Literal(LiteralValue::Double(_))  => Some(StaticType::Double),
+            Expr::Literal(LiteralValue::String(_))  => Some(StaticType::String),
             Expr::Literal(LiteralValue::Boolean(_)) => Some(StaticType::Boolean),
 
-            Expr::VariableReference { name } => {
-                self.symbol_table.get(name).copied()
-            }
+            Expr::VariableReference { name } => self.lookup_var(name),
 
-            Expr::Operation { op, .. } => {
+            Expr::Operation { op, operands } => {
                 match op {
+                    // These always produce Boolean
                     Operator::Equal
                     | Operator::NotEqual
                     | Operator::Less
@@ -788,10 +812,27 @@ impl HaplParser {
                     | Operator::Or
                     | Operator::Not => Some(StaticType::Boolean),
 
+                    // Arithmetic: infer from the first operand so Double + Double => Double
                     Operator::Add
                     | Operator::Subtract
                     | Operator::Multiply
-                    | Operator::Divide => Some(StaticType::Integer),
+                    | Operator::Divide => {
+                        // Walk operands and promote: if any is Double, result is Double
+                        let mut result_type = None;
+                        for operand in operands {
+                            match self.infer_type(operand) {
+                                Some(StaticType::Double) => {
+                                    result_type = Some(StaticType::Double);
+                                    break; // Double wins, stop early
+                                }
+                                Some(t) if result_type.is_none() => {
+                                    result_type = Some(t);
+                                }
+                                _ => {}
+                            }
+                        }
+                        result_type
+                    }
                 }
             }
 
