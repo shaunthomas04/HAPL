@@ -431,6 +431,43 @@ impl Interpreter {
                 Self::apply_operator(op, lhs, &LiteralValue::Double(*b as f64))
             }
 
+            // String + Integer
+            (LiteralValue::String(a), LiteralValue::Integer(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Invalid operator for string+integer"),
+            },
+
+            // Integer + String
+            (LiteralValue::Integer(a), LiteralValue::String(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Invalid operator for integer+string"),
+            },
+
+            // String + Double
+            (LiteralValue::String(a), LiteralValue::Double(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Invalid operator for string+double"),
+            },
+
+            // Double + String
+            (LiteralValue::Double(a), LiteralValue::String(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Invalid operator for double+string"),
+            },
+
+            // String + Boolean
+            (LiteralValue::String(a), LiteralValue::Boolean(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Invalid operator for string+boolean"),
+            },
+
+            // Boolean + String
+            (LiteralValue::Boolean(a), LiteralValue::String(b)) => match op {
+                Operator::Add => LiteralValue::String(format!("{}{}", a, b)),
+                _ => panic!("Invalid operator for boolean+string"),
+            },
+
+
             _ => panic!("Unsupported operand types for {:?}", op),
         }
     }

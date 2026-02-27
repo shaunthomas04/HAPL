@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>HAPL Circumference Demo</title>
+    <title>HAPL String Concat Test</title>
 </head>
 
 <body>
 
-    <!-- Function declaration: greet(name: string, age: integer) -> void -->
+    <!-- greet(name: string, age: integer) -> void -->
+    <!-- prints: "Name: Shaun, Age: 25" -->
     <div class="void-function" id="greet">
         <div class="params">
             <div class="string-param" id="name"></div>
@@ -15,38 +16,15 @@
         </div>
         <div class="body">
             <p>
-                <var class="name"></var>
-            </p>
-            <p>
-                <var class="age"></var>
-            </p>
-        </div>
-    </div>
-
-
-    <!-- Function declaration: circumference(radius: integer) -> integer -->
-    <!-- circumference = 2 * 3 * radius  (using 3 as approximation for pi) -->
-    <div class="integer-function" id="circumference">
-
-        <div class="params">
-            <div class="integer-param" id="radius"></div>
-        </div>
-
-        <div class="body">
-
-            <!-- return 2 * 3 * radius -->
-            <div class="return">
-                <div class="*">
-                    <span class="integer">2</span>
-                    <div class="*">
-                        <span class="integer">3</span>
-                        <var class="radius"></var>
-                    </div>
+                <div class="+">
+                    <span class="string">"Name: "</span>
+                    <var class="name"></var>
+                    <span class="string">", Age: "</span>
+                    <var class="age"></var>
+                    <span class="string">"!"</span>
                 </div>
-            </div>
-
+            </p>
         </div>
-
     </div>
 
 
@@ -59,10 +37,6 @@
         <span class="integer">25</span>
     </var>
 
-    <var class="integer" id="myRadius">
-        <span class="integer">7</span>
-    </var>
-
 
     <!-- Call greet(myName, myAge) -->
     <div class="greet">
@@ -71,23 +45,6 @@
             <var class="myAge"></var>
         </div>
     </div>
-
-
-    <!-- Store circumference(myRadius) result into a variable -->
-    <var class="integer" id="result">
-        <div class="circumference">
-            <div class="args">
-                <var class="myRadius"></var>
-            </div>
-        </div>
-    </var>
-
-
-    <!-- Print the result -->
-    <p>
-        <var class="result"></var>
-    </p>
-
 
 </body>
 </html>
