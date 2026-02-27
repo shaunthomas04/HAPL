@@ -1,5 +1,6 @@
 use crate::HtmlTag;
 use crate::ast::{LiteralValue, StaticType};
+use crate::error::{ErrorCode, HaplError, lexer_err};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LexerTagType {
@@ -31,8 +32,6 @@ pub enum HaplTokenType {
     CloseVarRef { name: String },
     OpenVarAssign { name: String },
     CloseVarAssign { name: String },
-    // FIX: OpenPrint and ClosePrint are unit variants (no fields).
-    // The parser must match them as `HaplTokenType::OpenPrint` not `HaplTokenType::OpenPrint { .. }`.
     OpenPrint,
     ClosePrint,
 
@@ -291,6 +290,18 @@ impl HaplToken {
     }
 }
 
+// ------------------------------------------------------------------
+// Helper: render an HtmlTag as a short HTML snippet for error context
+// e.g.  `<var class="foo" id="bar">`
+// ------------------------------------------------------------------
+fn tag_snippet(tag: &HtmlTag) -> String {
+    let mut s = format!("<{}", tag.tag_type);
+    if let Some(c) = &tag.class { s.push_str(&format!(" class=\"{}\"", c)); }
+    if let Some(id) = &tag.id   { s.push_str(&format!(" id=\"{}\"", id));   }
+    s.push('>');
+    s
+}
+
 pub struct HaplLexer {
     tokens: Vec<HaplToken>,
 }
@@ -300,8 +311,9 @@ impl HaplLexer {
         Self { tokens: Vec::new() }
     }
 
-    pub fn lex(&mut self, tag: &HtmlTag) {
-        self.walk(tag);
+    /// Lex the tag tree, returning `Err(HaplError)` on the first error.
+    pub fn lex(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        self.walk(tag)
     }
 
     pub fn tokens(&self) -> &[HaplToken] {
@@ -309,73 +321,85 @@ impl HaplLexer {
     }
 
     // --------------------------------------------------
-    // Top-level dispatcher — splits walk by tag type
-    // FIX: Previously one giant method; now dispatches to focused helpers.
-    // This makes it much easier to add new tag types without risk of
-    // accidentally falling through to the wrong handler.
+    // Top-level dispatcher
     // --------------------------------------------------
-    fn walk(&mut self, tag: &HtmlTag) {
+    fn walk(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         match tag.tag_type.as_str() {
             "div"  => self.walk_div(tag),
             "p"    => self.walk_print(tag),
             "var"  => self.walk_var(tag),
             "span" => self.walk_span(tag),
-            // Structural HTML tags are walked transparently — their open/close tokens
-            // are emitted so the token stream reflects the document structure, but the
-            // parser simply ignores unknown structural wrappers and recurses into children.
-            // This allows HAPL programs to live inside real, valid HTML files.
             "html" | "head" | "body" | "title" | "meta" | "link" => {
                 self.tokens.push(HaplToken::open_html_tag(tag.tag_type.clone()));
                 for child in &tag.child_tags {
-                    self.walk(child);
+                    self.walk(child)?;
                 }
                 self.tokens.push(HaplToken::close_html_tag(tag.tag_type.clone()));
+                Ok(())
             }
-
-            other => {
-                // FIX: Unknown tags now panic with a clear message instead of
-                // silently falling through to the literal parser.
-                panic!(
-                    "Unrecognized tag type '{}'. \
-                     Supported tags: div, p, var, span",
-                    other
-                );
-            }
+            other => Err(
+                lexer_err(
+                    ErrorCode::UnknownTag,
+                    format!("unrecognized tag <{}>", other),
+                )
+                .with_tag(
+                    tag_snippet(tag),
+                    format!("'{}' is not a valid HAPL tag", other),
+                )
+                .with_hint("supported tags: div, p, var, span"),
+            ),
         }
     }
 
     // --------------------------------------------------
     // <p> → Print statement
     // --------------------------------------------------
-    fn walk_print(&mut self, tag: &HtmlTag) {
+    fn walk_print(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         self.tokens.push(HaplToken::open_print());
         for child in &tag.child_tags {
-            self.walk(child);
+            self.walk(child)?;
         }
         self.tokens.push(HaplToken::close_print());
+        Ok(())
     }
 
     // --------------------------------------------------
     // <var> → Variable declaration, reference, or assignment
     // --------------------------------------------------
-    fn walk_var(&mut self, tag: &HtmlTag) {
-        let class = tag.class.as_ref().expect(
-            "<var> tag requires a class attribute (type name for declaration, variable name for reference/assignment)"
-        );
+    fn walk_var(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let class = tag.class.as_ref().ok_or_else(|| {
+            lexer_err(
+                ErrorCode::MissingClass,
+                "missing class attribute on <var> tag",
+            )
+            .with_tag(
+                tag_snippet(tag),
+                "expected class=\"<type>\" for declaration or class=\"<name>\" for reference",
+            )
+            .with_hint("example: <var class=\"integer\" id=\"x\">10</var>")
+        })?;
 
         if let Some(id) = &tag.id {
             // Variable declaration: <var class="integer" id="x">10</var>
-            let var_type = parse_static_type(class);
+            let var_type = parse_static_type(class).ok_or_else(|| {
+                lexer_err(
+                    ErrorCode::UnknownType,
+                    format!("unknown type '{}' in variable declaration", class),
+                )
+                .with_tag(
+                    tag_snippet(tag),
+                    format!("'{}' is not a valid type", class),
+                )
+                .with_hint("valid types: integer, double, string, boolean")
+            })?;
 
             self.tokens.push(HaplToken::new(
                 HaplTokenType::OpenVarDec { var_type, name: id.clone() },
                 Some(format!("{} {}", class, id)),
             ));
-
             for child in &tag.child_tags {
-                self.walk(child);
+                self.walk(child)?;
             }
-
             self.tokens.push(HaplToken::new(
                 HaplTokenType::CloseVarDec { var_type, name: id.clone() },
                 Some(format!("{} {}", class, id)),
@@ -397,125 +421,138 @@ impl HaplLexer {
                 Some(class.clone()),
             ));
             for child in &tag.child_tags {
-                self.walk(child);
+                self.walk(child)?;
             }
             self.tokens.push(HaplToken::new(
                 HaplTokenType::CloseVarAssign { name: class.clone() },
                 Some(class.clone()),
             ));
         }
+        Ok(())
     }
 
     // --------------------------------------------------
     // <span> → Literal value
     // --------------------------------------------------
-    fn walk_span(&mut self, tag: &HtmlTag) {
+    fn walk_span(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         if tag.child_tags.is_empty() && !tag.content.trim().is_empty() {
-            let token = self.parse_literal(&tag.content, tag.class.as_deref());
+            let token = self.parse_literal(tag)?;
             self.tokens.push(token);
         } else {
             for child in &tag.child_tags {
-                self.walk(child);
+                self.walk(child)?;
             }
         }
+        Ok(())
     }
 
     // --------------------------------------------------
     // <div> → All language constructs
-    // FIX: Broken into clearly ordered specific checks. The function-call
-    // fallback now only fires after ALL known classes have been checked,
-    // removing the need for a manually maintained reserved-words list that
-    // could drift out of sync.
     // --------------------------------------------------
-    fn walk_div(&mut self, tag: &HtmlTag) {
-        let class = match &tag.class {
-            Some(c) => c.clone(),
-            None => {
-                // A <div> with no class is not meaningful in this language
-                panic!("A <div> tag must have a class attribute");
-            }
-        };
+    fn walk_div(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let class = tag.class.as_ref().ok_or_else(|| {
+            lexer_err(
+                ErrorCode::MissingClass,
+                "missing class attribute on <div> tag",
+            )
+            .with_tag(tag_snippet(tag), "every <div> must have a class")
+            .with_hint("example: <div class=\"+\"> ... </div>")
+        })?.clone();
 
         // ---- Arithmetic operators ----
         if let Some((open, close)) = self.try_arithmetic_tokens(&class) {
             self.tokens.push(open);
-            for child in &tag.child_tags { self.walk(child); }
+            for child in &tag.child_tags { self.walk(child)?; }
             self.tokens.push(close);
-            return;
+            return Ok(());
         }
 
         // ---- Boolean operators ----
         if let Some((open, close)) = self.try_boolean_tokens(&class) {
             self.tokens.push(open);
-            for child in &tag.child_tags { self.walk(child); }
+            for child in &tag.child_tags { self.walk(child)?; }
             self.tokens.push(close);
-            return;
+            return Ok(());
         }
 
         // ---- Comparison operators ----
         if let Some((open, close)) = self.try_comparison_tokens(&class) {
             self.tokens.push(open);
-            for child in &tag.child_tags { self.walk(child); }
+            for child in &tag.child_tags { self.walk(child)?; }
             self.tokens.push(close);
-            return;
+            return Ok(());
         }
 
         // ---- Conditional ----
         if class == "conditional" {
-            self.walk_conditional(tag);
-            return;
+            return self.walk_conditional(tag);
         }
 
         // ---- While loop ----
         if class == "while" {
-            self.walk_while(tag);
-            return;
+            return self.walk_while(tag);
         }
 
         // ---- For loop ----
         if class == "for" {
-            self.walk_for(tag);
-            return;
+            return self.walk_for(tag);
         }
 
         // ---- Return ----
         if class == "return" {
             self.tokens.push(HaplToken::open_return());
             for child in &tag.child_tags {
-                self.walk(child);
+                self.walk(child)?;
             }
             self.tokens.push(HaplToken::close_return());
-            return;
+            return Ok(());
         }
 
-        // ---- Function declaration: <div class="integer-function" id="myFunc"> ----
+        // ---- Function declaration ----
         if let Some(return_type) = self.parse_function_class(&class) {
-            let name = tag.id.clone()
-                .expect("Function declaration <div> must have an id attribute");
-            self.walk_function_decl(tag, name, return_type);
-            return;
+            let name = tag.id.clone().ok_or_else(|| {
+                lexer_err(
+                    ErrorCode::MissingId,
+                    format!("function declaration '{}' is missing an id attribute", class),
+                )
+                .with_tag(
+                    tag_snippet(tag),
+                    "id attribute required to name the function",
+                )
+                .with_hint(format!(
+                    "example: <div class=\"{}\" id=\"myFunc\">",
+                    class
+                ))
+            })?;
+            return self.walk_function_decl(tag, name, return_type);
         }
 
-        // ---- Function call: <div class="myFunc"> (no id, not a known keyword) ----
-        // FIX: No manually maintained reserved list. By this point every known
-        // class has already been handled above and returned early. Anything
-        // remaining that has no id is treated as a function call.
+        // ---- Function call ----
         if tag.id.is_none() {
-            self.walk_function_call(tag, class);
-            return;
+            return self.walk_function_call(tag, class);
         }
 
-        panic!(
-            "Unrecognized <div> usage: class='{}', id={:?}",
-            class,
-            tag.id
-        );
+        Err(
+            lexer_err(
+                ErrorCode::UnknownTag,
+                format!("unrecognized <div> usage: class='{}'", class),
+            )
+            .with_tag(
+                tag_snippet(tag),
+                format!("'{}' is not a known keyword or declared function", class),
+            )
+            .with_hint(
+                "valid div classes: +, -, *, /, &&, ||, !, equal, not_equal, less, \
+                 less_equal, greater, greater_equal, conditional, while, for, return, \
+                 <type>-function",
+            ),
+        )
     }
 
     // --------------------------------------------------
     // Conditional <div class="conditional">
     // --------------------------------------------------
-    fn walk_conditional(&mut self, tag: &HtmlTag) {
+    fn walk_conditional(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         self.tokens.push(HaplToken::open_conditional());
 
         for child in &tag.child_tags {
@@ -523,34 +560,46 @@ impl HaplLexer {
             match child.class.as_deref() {
                 Some("if") => {
                     self.tokens.push(HaplToken::open_if());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_if());
                 }
                 Some("elif") => {
                     self.tokens.push(HaplToken::open_elif());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_elif());
                 }
                 Some("else") => {
                     self.tokens.push(HaplToken::open_else());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_else());
                 }
-                other => panic!(
-                    "Unexpected child class '{:?}' inside <div class=\"conditional\">. \
-                     Expected 'if', 'elif', or 'else'.",
-                    other
-                ),
+                other => {
+                    return Err(
+                        lexer_err(
+                            ErrorCode::BadConditionalChild,
+                            format!(
+                                "unexpected child '{}' inside <div class=\"conditional\">",
+                                other.unwrap_or("(none)")
+                            ),
+                        )
+                        .with_tag(
+                            tag_snippet(child),
+                            format!("'{}' is not valid here", other.unwrap_or("(none)")),
+                        )
+                        .with_hint("valid children of conditional: if, elif, else"),
+                    );
+                }
             }
         }
 
         self.tokens.push(HaplToken::close_conditional());
+        Ok(())
     }
 
     // --------------------------------------------------
     // While loop <div class="while">
     // --------------------------------------------------
-    fn walk_while(&mut self, tag: &HtmlTag) {
+    fn walk_while(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         self.tokens.push(HaplToken::open_loop(LoopType::While));
 
         for child in &tag.child_tags {
@@ -558,29 +607,41 @@ impl HaplLexer {
             match child.class.as_deref() {
                 Some("condition") => {
                     self.tokens.push(HaplToken::open_loop_condition());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_loop_condition());
                 }
                 Some("body") => {
                     self.tokens.push(HaplToken::open_loop_body());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_loop_body());
                 }
-                other => panic!(
-                    "Unexpected child class '{:?}' inside <div class=\"while\">. \
-                     Expected 'condition' or 'body'.",
-                    other
-                ),
+                other => {
+                    return Err(
+                        lexer_err(
+                            ErrorCode::BadLoopChild,
+                            format!(
+                                "unexpected child '{}' inside <div class=\"while\">",
+                                other.unwrap_or("(none)")
+                            ),
+                        )
+                        .with_tag(
+                            tag_snippet(child),
+                            format!("'{}' is not valid here", other.unwrap_or("(none)")),
+                        )
+                        .with_hint("valid children of while: condition, body"),
+                    );
+                }
             }
         }
 
         self.tokens.push(HaplToken::close_loop(LoopType::While));
+        Ok(())
     }
 
     // --------------------------------------------------
     // For loop <div class="for">
     // --------------------------------------------------
-    fn walk_for(&mut self, tag: &HtmlTag) {
+    fn walk_for(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         self.tokens.push(HaplToken::open_loop(LoopType::For));
 
         for child in &tag.child_tags {
@@ -588,39 +649,56 @@ impl HaplLexer {
             match child.class.as_deref() {
                 Some("iterator") => {
                     self.tokens.push(HaplToken::open_loop_iterator());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_loop_iterator());
                 }
                 Some("condition") => {
                     self.tokens.push(HaplToken::open_loop_condition());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_loop_condition());
                 }
                 Some("increment") => {
                     self.tokens.push(HaplToken::open_loop_increment());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_loop_increment());
                 }
                 Some("body") => {
                     self.tokens.push(HaplToken::open_loop_body());
-                    for grandchild in &child.child_tags { self.walk(grandchild); }
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
                     self.tokens.push(HaplToken::close_loop_body());
                 }
-                other => panic!(
-                    "Unexpected child class '{:?}' inside <div class=\"for\">. \
-                     Expected 'iterator', 'condition', 'increment', or 'body'.",
-                    other
-                ),
+                other => {
+                    return Err(
+                        lexer_err(
+                            ErrorCode::BadLoopChild,
+                            format!(
+                                "unexpected child '{}' inside <div class=\"for\">",
+                                other.unwrap_or("(none)")
+                            ),
+                        )
+                        .with_tag(
+                            tag_snippet(child),
+                            format!("'{}' is not valid here", other.unwrap_or("(none)")),
+                        )
+                        .with_hint("valid children of for: iterator, condition, increment, body"),
+                    );
+                }
             }
         }
 
         self.tokens.push(HaplToken::close_loop(LoopType::For));
+        Ok(())
     }
 
     // --------------------------------------------------
     // Function declaration
     // --------------------------------------------------
-    fn walk_function_decl(&mut self, tag: &HtmlTag, name: String, return_type: StaticType) {
+    fn walk_function_decl(
+        &mut self,
+        tag: &HtmlTag,
+        name: String,
+        return_type: StaticType,
+    ) -> Result<(), HaplError> {
         self.tokens.push(HaplToken::new(
             HaplTokenType::OpenFunction { name: name.clone(), return_type },
             Some(name.clone()),
@@ -632,28 +710,53 @@ impl HaplLexer {
                     self.tokens.push(HaplToken::open_params());
 
                     for grandchild in &child.child_tags {
-                        // FIX: parse_param_class now uses "double" instead of "float"
                         let param_type = self
                             .parse_param_class(grandchild.class.as_deref())
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "Invalid or missing param type on grandchild: class={:?}",
-                                    grandchild.class
+                            .ok_or_else(|| {
+                                lexer_err(
+                                    ErrorCode::UnknownParamType,
+                                    format!(
+                                        "invalid or missing param type on parameter: class={:?}",
+                                        grandchild.class
+                                    ),
                                 )
-                            });
+                                .with_tag(
+                                    tag_snippet(grandchild),
+                                    format!(
+                                        "'{}' is not a valid param type",
+                                        grandchild.class.as_deref().unwrap_or("(none)")
+                                    ),
+                                )
+                                .with_hint(
+                                    "valid param types: integer-param, double-param, \
+                                     string-param, boolean-param",
+                                )
+                            })?;
 
-                        let param_name = grandchild.id.clone()
-                            .expect("Parameter <div> must have an id attribute");
+                        let param_name = grandchild.id.clone().ok_or_else(|| {
+                            lexer_err(
+                                ErrorCode::MissingId,
+                                "parameter tag is missing an id attribute",
+                            )
+                            .with_tag(
+                                tag_snippet(grandchild),
+                                "id is required to name the parameter",
+                            )
+                            .with_hint(
+                                "example: <div class=\"integer-param\" id=\"age\"></div>",
+                            )
+                        })?;
 
                         self.tokens.push(HaplToken::new(
-                            HaplTokenType::OpenParam { name: param_name.clone(), param_type },
+                            HaplTokenType::OpenParam {
+                                name: param_name.clone(),
+                                param_type,
+                            },
                             Some(param_name.clone()),
                         ));
-
                         for param_child in &grandchild.child_tags {
-                            self.walk(param_child);
+                            self.walk(param_child)?;
                         }
-
                         self.tokens.push(HaplToken::new(
                             HaplTokenType::CloseParam { name: param_name.clone() },
                             Some(param_name),
@@ -666,16 +769,28 @@ impl HaplLexer {
                 Some("body") => {
                     self.tokens.push(HaplToken::open_function_body());
                     for grandchild in &child.child_tags {
-                        self.walk(grandchild);
+                        self.walk(grandchild)?;
                     }
                     self.tokens.push(HaplToken::close_function_body());
                 }
 
-                other => panic!(
-                    "Unexpected child class '{:?}' inside function declaration '{}'. \
-                     Expected 'params' or 'body'.",
-                    other, name
-                ),
+                other => {
+                    return Err(
+                        lexer_err(
+                            ErrorCode::BadFunctionChild,
+                            format!(
+                                "unexpected child '{}' inside function declaration '{}'",
+                                other.unwrap_or("(none)"),
+                                name
+                            ),
+                        )
+                        .with_tag(
+                            tag_snippet(child),
+                            format!("'{}' is not valid here", other.unwrap_or("(none)")),
+                        )
+                        .with_hint("valid children of a function declaration: params, body"),
+                    );
+                }
             }
         }
 
@@ -683,12 +798,13 @@ impl HaplLexer {
             HaplTokenType::CloseFunction { name: name.clone() },
             Some(name),
         ));
+        Ok(())
     }
 
     // --------------------------------------------------
     // Function call <div class="funcName">
     // --------------------------------------------------
-    fn walk_function_call(&mut self, tag: &HtmlTag, name: String) {
+    fn walk_function_call(&mut self, tag: &HtmlTag, name: String) -> Result<(), HaplError> {
         self.tokens.push(HaplToken::new(
             HaplTokenType::OpenFunctionCall { name: name.clone() },
             Some(name.clone()),
@@ -698,11 +814,11 @@ impl HaplLexer {
             if child.class.as_deref() == Some("args") {
                 self.tokens.push(HaplToken::open_args());
                 for grandchild in &child.child_tags {
-                    self.walk(grandchild);
+                    self.walk(grandchild)?;
                 }
                 self.tokens.push(HaplToken::close_args());
             } else {
-                self.walk(child);
+                self.walk(child)?;
             }
         }
 
@@ -710,62 +826,99 @@ impl HaplLexer {
             HaplTokenType::CloseFunctionCall { name: name.clone() },
             Some(name),
         ));
+        Ok(())
     }
 
     // --------------------------------------------------
-    // Literal parsing
+    // Literal parsing — now takes the whole tag for error context
     // --------------------------------------------------
-    fn parse_literal(&self, text: &str, class_type: Option<&str>) -> HaplToken {
-        let trimmed = text.trim();
+    fn parse_literal(&self, tag: &HtmlTag) -> Result<HaplToken, HaplError> {
+        let trimmed = tag.content.trim();
 
-        // FIX: Error message now includes the offending content for easier debugging
-        let class = class_type.unwrap_or_else(|| {
-            panic!(
-                "Static type class required on literal tag containing '{}'. \
-                 Expected class='integer', 'double', 'boolean', or 'string'.",
-                trimmed
+        let class = tag.class.as_deref().ok_or_else(|| {
+            lexer_err(
+                ErrorCode::MissingClass,
+                format!(
+                    "literal tag containing '{}' has no class attribute",
+                    trimmed
+                ),
             )
-        });
+            .with_tag(
+                tag_snippet(tag),
+                "class attribute required to identify the type",
+            )
+            .with_hint("example: <span class=\"integer\">42</span>")
+        })?;
 
         match class {
-            "integer" => trimmed
-                .parse::<i64>()
-                .map(HaplToken::integer)
-                .unwrap_or_else(|_| {
-                    panic!("Type error: '{}' is not a valid integer", trimmed)
-                }),
+            "integer" => trimmed.parse::<i64>().map(HaplToken::integer).map_err(|_| {
+                lexer_err(
+                    ErrorCode::InvalidLiteral,
+                    format!("'{}' is not a valid integer", trimmed),
+                )
+                .with_tag(
+                    tag_snippet(tag),
+                    format!("cannot parse '{}' as integer", trimmed),
+                )
+                .with_hint("integer literals must be whole numbers, e.g. 42 or -7")
+            }),
 
-            "double" => trimmed
-                .parse::<f64>()
-                .map(HaplToken::double)
-                .unwrap_or_else(|_| {
-                    panic!("Type error: '{}' is not a valid double", trimmed)
-                }),
+            "double" => trimmed.parse::<f64>().map(HaplToken::double).map_err(|_| {
+                lexer_err(
+                    ErrorCode::InvalidLiteral,
+                    format!("'{}' is not a valid double", trimmed),
+                )
+                .with_tag(
+                    tag_snippet(tag),
+                    format!("cannot parse '{}' as double", trimmed),
+                )
+                .with_hint("double literals must be floating-point numbers, e.g. 3.14")
+            }),
 
             "string" => {
                 if !trimmed.starts_with('"') || !trimmed.ends_with('"') || trimmed.len() < 2 {
-                    panic!(
-                        "String literals must be enclosed in double quotes but got '{}'",
-                        trimmed
+                    return Err(
+                        lexer_err(
+                            ErrorCode::StringNotQuoted,
+                            format!("string literal '{}' is not enclosed in double quotes", trimmed),
+                        )
+                        .with_tag(
+                            tag_snippet(tag),
+                            "string content must be wrapped in double quotes",
+                        )
+                        .with_hint("example: <span class=\"string\">\"hello world\"</span>"),
                     );
                 }
                 let inner = &trimmed[1..trimmed.len() - 1];
-                HaplToken::string(inner.to_string())
+                Ok(HaplToken::string(inner.to_string()))
             }
 
             "boolean" => match trimmed {
-                "true"  => HaplToken::boolean(true),
-                "false" => HaplToken::boolean(false),
-                _ => panic!(
-                    "Type error: '{}' is not a valid boolean (expected 'true' or 'false')",
-                    trimmed
+                "true"  => Ok(HaplToken::boolean(true)),
+                "false" => Ok(HaplToken::boolean(false)),
+                _ => Err(
+                    lexer_err(
+                        ErrorCode::InvalidLiteral,
+                        format!("'{}' is not a valid boolean", trimmed),
+                    )
+                    .with_tag(
+                        tag_snippet(tag),
+                        format!("expected 'true' or 'false', got '{}'", trimmed),
+                    )
+                    .with_hint("boolean literals must be exactly true or false"),
                 ),
             },
 
-            other => panic!(
-                "Unknown static type '{}' on literal containing '{}'. \
-                 Expected 'integer', 'double', 'boolean', or 'string'.",
-                other, trimmed
+            other => Err(
+                lexer_err(
+                    ErrorCode::UnknownType,
+                    format!("unknown literal type '{}'", other),
+                )
+                .with_tag(
+                    tag_snippet(tag),
+                    format!("'{}' is not a recognized type", other),
+                )
+                .with_hint("valid literal types: integer, double, boolean, string"),
             ),
         }
     }
@@ -810,30 +963,26 @@ impl HaplLexer {
 
     fn parse_function_class(&self, class: &str) -> Option<StaticType> {
         let type_part = class.strip_suffix("-function")?;
-        Some(match type_part {
-            "integer" => StaticType::Integer,
-            "double"  => StaticType::Double,
-            "string"  => StaticType::String,
-            "boolean" => StaticType::Boolean,
-            "void"    => StaticType::Void,
-            other     => panic!("Unknown function return type '{}'", other),
-        })
+        match type_part {
+            "integer" => Some(StaticType::Integer),
+            "double"  => Some(StaticType::Double),
+            "string"  => Some(StaticType::String),
+            "boolean" => Some(StaticType::Boolean),
+            "void"    => Some(StaticType::Void),
+            _         => None,
+        }
     }
 
     fn parse_param_class(&self, class: Option<&str>) -> Option<StaticType> {
-        let class = class?;
-        let type_part = class.strip_suffix("-param")?;
-
-        Some(match type_part {
-            "integer" => StaticType::Integer,
-            // FIX: Was "float" which didn't match any actual HTML class used elsewhere.
-            // Changed to "double" to match the rest of the type system.
-            "double"  => StaticType::Double,
-            "string"  => StaticType::String,
-            "boolean" => StaticType::Boolean,
-            "void"    => StaticType::Void,
-            _         => return None,
-        })
+        let type_part = class?.strip_suffix("-param")?;
+        match type_part {
+            "integer" => Some(StaticType::Integer),
+            "double"  => Some(StaticType::Double),
+            "string"  => Some(StaticType::String),
+            "boolean" => Some(StaticType::Boolean),
+            "void"    => Some(StaticType::Void),
+            _         => None,
+        }
     }
 
     // --------------------------------------------------
@@ -875,129 +1024,74 @@ impl HaplLexer {
                 HaplTokenType::CloseVarAssign { name } => {
                     println!("CloseVarAssign({}) -> {:?}", name, token.value);
                 }
-                HaplTokenType::OpenPrint => {
-                    println!("OpenPrint -> {:?}", token.value);
-                }
-                HaplTokenType::ClosePrint => {
-                    println!("ClosePrint -> {:?}", token.value);
-                }
-                HaplTokenType::OpenConditional => {
-                    println!("OpenConditional -> {:?}", token.value);
-                }
-                HaplTokenType::CloseConditional => {
-                    println!("CloseConditional -> {:?}", token.value);
-                }
-                HaplTokenType::OpenIf => {
-                    println!("OpenIf -> {:?}", token.value);
-                }
-                HaplTokenType::CloseIf => {
-                    println!("CloseIf -> {:?}", token.value);
-                }
-                HaplTokenType::OpenElif => {
-                    println!("OpenElif -> {:?}", token.value);
-                }
-                HaplTokenType::CloseElif => {
-                    println!("CloseElif -> {:?}", token.value);
-                }
-                HaplTokenType::OpenElse => {
-                    println!("OpenElse -> {:?}", token.value);
-                }
-                HaplTokenType::CloseElse => {
-                    println!("CloseElse -> {:?}", token.value);
-                }
+                HaplTokenType::OpenPrint => println!("OpenPrint -> {:?}", token.value),
+                HaplTokenType::ClosePrint => println!("ClosePrint -> {:?}", token.value),
+                HaplTokenType::OpenConditional => println!("OpenConditional -> {:?}", token.value),
+                HaplTokenType::CloseConditional => println!("CloseConditional -> {:?}", token.value),
+                HaplTokenType::OpenIf => println!("OpenIf -> {:?}", token.value),
+                HaplTokenType::CloseIf => println!("CloseIf -> {:?}", token.value),
+                HaplTokenType::OpenElif => println!("OpenElif -> {:?}", token.value),
+                HaplTokenType::CloseElif => println!("CloseElif -> {:?}", token.value),
+                HaplTokenType::OpenElse => println!("OpenElse -> {:?}", token.value),
+                HaplTokenType::CloseElse => println!("CloseElse -> {:?}", token.value),
                 HaplTokenType::OpenLoop { loop_type } => {
                     println!("OpenLoop({:?}) -> {:?}", loop_type, token.value);
                 }
                 HaplTokenType::CloseLoop { loop_type } => {
                     println!("CloseLoop({:?}) -> {:?}", loop_type, token.value);
                 }
-                HaplTokenType::OpenLoopCondition => {
-                    println!("OpenLoopCondition -> {:?}", token.value);
-                }
-                HaplTokenType::CloseLoopCondition => {
-                    println!("CloseLoopCondition -> {:?}", token.value);
-                }
-                HaplTokenType::OpenLoopBody => {
-                    println!("OpenLoopBody -> {:?}", token.value);
-                }
-                HaplTokenType::CloseLoopBody => {
-                    println!("CloseLoopBody -> {:?}", token.value);
-                }
-                HaplTokenType::OpenLoopIterator => {
-                    println!("OpenLoopIterator -> {:?}", token.value);
-                }
-                HaplTokenType::CloseLoopIterator => {
-                    println!("CloseLoopIterator -> {:?}", token.value);
-                }
-                HaplTokenType::OpenLoopIncrement => {
-                    println!("OpenLoopIncrement -> {:?}", token.value);
-                }
-                HaplTokenType::CloseLoopIncrement => {
-                    println!("CloseLoopIncrement -> {:?}", token.value);
-                }
+                HaplTokenType::OpenLoopCondition => println!("OpenLoopCondition -> {:?}", token.value),
+                HaplTokenType::CloseLoopCondition => println!("CloseLoopCondition -> {:?}", token.value),
+                HaplTokenType::OpenLoopBody => println!("OpenLoopBody -> {:?}", token.value),
+                HaplTokenType::CloseLoopBody => println!("CloseLoopBody -> {:?}", token.value),
+                HaplTokenType::OpenLoopIterator => println!("OpenLoopIterator -> {:?}", token.value),
+                HaplTokenType::CloseLoopIterator => println!("CloseLoopIterator -> {:?}", token.value),
+                HaplTokenType::OpenLoopIncrement => println!("OpenLoopIncrement -> {:?}", token.value),
+                HaplTokenType::CloseLoopIncrement => println!("CloseLoopIncrement -> {:?}", token.value),
                 HaplTokenType::OpenFunction { name, return_type } => {
                     println!("OpenFunction({}, {:?}) -> {:?}", name, return_type, token.value);
                 }
                 HaplTokenType::CloseFunction { name } => {
                     println!("CloseFunction({}) -> {:?}", name, token.value);
                 }
-                HaplTokenType::OpenParams => {
-                    println!("OpenParams -> {:?}", token.value);
-                }
-                HaplTokenType::CloseParams => {
-                    println!("CloseParams -> {:?}", token.value);
-                }
+                HaplTokenType::OpenParams => println!("OpenParams -> {:?}", token.value),
+                HaplTokenType::CloseParams => println!("CloseParams -> {:?}", token.value),
                 HaplTokenType::OpenParam { name, param_type } => {
                     println!("OpenParam({}, {:?}) -> {:?}", name, param_type, token.value);
                 }
                 HaplTokenType::CloseParam { name } => {
                     println!("CloseParam({}) -> {:?}", name, token.value);
                 }
-                HaplTokenType::OpenFunctionBody => {
-                    println!("OpenFunctionBody -> {:?}", token.value);
-                }
-                HaplTokenType::CloseFunctionBody => {
-                    println!("CloseFunctionBody -> {:?}", token.value);
-                }
+                HaplTokenType::OpenFunctionBody => println!("OpenFunctionBody -> {:?}", token.value),
+                HaplTokenType::CloseFunctionBody => println!("CloseFunctionBody -> {:?}", token.value),
                 HaplTokenType::OpenFunctionCall { name } => {
                     println!("OpenFunctionCall({}) -> {:?}", name, token.value);
                 }
                 HaplTokenType::CloseFunctionCall { name } => {
                     println!("CloseFunctionCall({}) -> {:?}", name, token.value);
                 }
-                HaplTokenType::OpenReturn => {
-                    println!("OpenReturn -> {:?}", token.value);
-                }
-                HaplTokenType::CloseReturn => {
-                    println!("CloseReturn -> {:?}", token.value);
-                }
-                HaplTokenType::OpenArgs => {
-                    println!("OpenArgs -> {:?}", token.value);
-                }
-                HaplTokenType::CloseArgs => {
-                    println!("CloseArgs -> {:?}", token.value);
-                }
+                HaplTokenType::OpenReturn => println!("OpenReturn -> {:?}", token.value),
+                HaplTokenType::CloseReturn => println!("CloseReturn -> {:?}", token.value),
+                HaplTokenType::OpenArgs => println!("OpenArgs -> {:?}", token.value),
+                HaplTokenType::CloseArgs => println!("CloseArgs -> {:?}", token.value),
             }
         }
     }
 }
 
-// --------------------------------------------------
+// ------------------------------------------------------------------
 // Free helpers
-// --------------------------------------------------
+// ------------------------------------------------------------------
 
-/// Parse a type keyword into a StaticType. Panics with a clear message on failure.
-fn parse_static_type(class: &str) -> StaticType {
+/// Returns `None` for unknown types instead of panicking — callers handle the error.
+fn parse_static_type(class: &str) -> Option<StaticType> {
     match class {
-        "integer" => StaticType::Integer,
-        "double"  => StaticType::Double,
-        "string"  => StaticType::String,
-        "boolean" => StaticType::Boolean,
-        "void"    => StaticType::Void,
-        other     => panic!(
-            "Unknown variable type '{}'. Expected 'integer', 'double', 'string', 'boolean', or 'void'.",
-            other
-        ),
+        "integer" => Some(StaticType::Integer),
+        "double"  => Some(StaticType::Double),
+        "string"  => Some(StaticType::String),
+        "boolean" => Some(StaticType::Boolean),
+        "void"    => Some(StaticType::Void),
+        _         => None,
     }
 }
 
