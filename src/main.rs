@@ -6,6 +6,7 @@ mod lexer;
 mod parser;
 mod ast;
 mod interpreter;
+mod error;
 
 use std::env;
 
@@ -49,7 +50,10 @@ fn main() {
     //Lex
     let mut lexer = HaplLexer::new();
     for tag in &tags {
-        lexer.lex(tag);
+        lexer.lex(tag).unwrap_or_else(|e| {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        });
     }
 
     if DEBUG_TOKENS {
@@ -77,7 +81,10 @@ fn main() {
 
     // Parse entire program
     let mut parser = HaplParser::new(tokens);
-    let ast_nodes = parser.parse_program();
+    let ast_nodes = parser.parse_program().unwrap_or_else(|e| {
+        eprintln!("{}", e);
+        std::process::exit(1);
+    });
 
     if DEBUG_AST {
         println!("--- AST ---");
