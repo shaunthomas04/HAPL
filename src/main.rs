@@ -98,5 +98,5 @@ fn main() {
         println!("--- RESULTS ---");
     }
     let mut interpreter = Interpreter::new();
-    interpreter.run(&ast_nodes);
+    interpreter.run(&ast_nodes, html_file_path);
 }
