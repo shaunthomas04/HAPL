@@ -81,7 +81,10 @@ fn main() {
 
     // Parse entire program
     let mut parser = HaplParser::new(tokens);
-    let ast_nodes = parser.parse_program();
+    let ast_nodes = parser.parse_program().unwrap_or_else(|e| {
+        eprintln!("{}", e);
+        std::process::exit(1);
+    });
 
     if DEBUG_AST {
         println!("--- AST ---");
