@@ -39,7 +39,7 @@ impl Interpreter {
     }
 
     fn current_scope(&mut self) -> &mut HashMap<String, LiteralValue> {
-        self.scopes.last_mut().unwrap()
+        self.scopes.last_mut().expect("scope stack is empty — this is a bug in the interpreter")
     }
 
     fn lookup(&self, name: &str) -> Result<LiteralValue, HaplError> {

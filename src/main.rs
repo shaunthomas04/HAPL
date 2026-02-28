@@ -51,8 +51,7 @@ fn main() {
     let mut lexer = HaplLexer::new();
     for tag in &tags {
         lexer.lex(tag).unwrap_or_else(|e| {
-            eprintln!("{}", e);
-            std::process::exit(1);
+            e.report_and_exit(html_file_path);
         });
     }
 
