@@ -20,6 +20,9 @@ pub struct HaplParser {
     // Registered function signatures — populated when a FunctionDeclaration is
     // parsed so that call sites can be type-checked at parse time.
     function_signatures: HashMap<String, FunctionSignature>,
+    // The return type of the function currently being parsed, used to
+    // type-check return statements and catch void-function-as-value misuse.
+    current_fn_return_type: Option<StaticType>,
 }
 
 impl HaplParser {
@@ -29,6 +32,7 @@ impl HaplParser {
             position: 0,
             scope_stack: vec![HashMap::new()], // global scope
             function_signatures: HashMap::new(),
+            current_fn_return_type: None,
         }
     }
 
@@ -47,7 +51,12 @@ impl HaplParser {
     }
 
     fn declare_var(&mut self, name: String, var_type: StaticType) -> Result<(), HaplError> {
-        let current = self.scope_stack.last_mut().unwrap();
+        let current = self.scope_stack.last_mut().ok_or_else(|| {
+            parser_err(
+                ErrorCode::UnexpectedEof,
+                "internal error: scope stack is empty — cannot declare variable",
+            )
+        })?;
         if current.contains_key(&name) {
             return Err(
                 parser_err(
@@ -191,6 +200,26 @@ impl HaplParser {
 
                 let value_expr = Box::new(self.parse_expression()?);
 
+                // Fix 5: reject void function calls as initialiser values
+                if let Expr::FunctionCall { name: ref fn_name, .. } = *value_expr {
+                    if let Some(sig) = self.function_signatures.get(fn_name) {
+                        if sig.return_type == StaticType::Void {
+                            return Err(
+                                parser_err(
+                                    ErrorCode::TypeMismatch,
+                                    format!(
+                                        "cannot use void function '{}' as a value in declaration of '{}'",
+                                        fn_name, var_name
+                                    ),
+                                )
+                                .with_hint(
+                                    "void functions do not return a value and cannot be used as expressions",
+                                ),
+                            );
+                        }
+                    }
+                }
+
                 if self.is_at_end() || !self.check_close_var_dec(var_type_copy, &var_name) {
                     return Err(
                         parser_err(
@@ -305,6 +334,26 @@ impl HaplParser {
                 };
 
                 let value_expr = Box::new(self.parse_expression()?);
+
+                // Fix 5: reject void function calls as assignment values
+                if let Expr::FunctionCall { name: ref fn_name, .. } = *value_expr {
+                    if let Some(sig) = self.function_signatures.get(fn_name) {
+                        if sig.return_type == StaticType::Void {
+                            return Err(
+                                parser_err(
+                                    ErrorCode::TypeMismatch,
+                                    format!(
+                                        "cannot use void function '{}' as a value in assignment to '{}'",
+                                        fn_name, var_name
+                                    ),
+                                )
+                                .with_hint(
+                                    "void functions do not return a value and cannot be used as expressions",
+                                ),
+                            );
+                        }
+                    }
+                }
 
                 // If literal, type-check immediately
                 if let Expr::Literal(ref lit_val) = *value_expr {
@@ -915,13 +964,63 @@ impl HaplParser {
     // Parse an entire program (ALL top-level statements)
     // --------------------------------------------------
     pub fn parse_program(&mut self) -> Result<Vec<Expr>, HaplError> {
-        let mut statements = Vec::new();
+        // PASS 1 — Pre-scan all top-level function signatures so that forward
+        // calls (call site before the declaration in source order) are
+        // type-checked in pass 2 just as well as backward calls.
+        self.prescan_function_signatures();
 
+        // PASS 2 — Full parse.
+        let mut statements = Vec::new();
         while !self.is_at_end() {
             statements.push(self.parse_statement()?);
         }
 
         Ok(statements)
+    }
+
+    // --------------------------------------------------
+    // Pass-1 helper: scan tokens for OpenFunction tags and register their
+    // signatures without consuming tokens — position is saved and restored.
+    // --------------------------------------------------
+    fn prescan_function_signatures(&mut self) {
+        let mut i = 0usize;
+        while i < self.tokens.len() {
+            if let HaplTokenType::OpenFunction { ref name, return_type } =
+                self.tokens[i].token_type.clone()
+            {
+                let fn_name = name.clone();
+                let mut params: Vec<(String, StaticType)> = Vec::new();
+
+                let mut j = i + 1;
+
+                // Skip to OpenParams
+                while j < self.tokens.len()
+                    && !matches!(self.tokens[j].token_type, HaplTokenType::OpenParams)
+                {
+                    j += 1;
+                }
+                j += 1; // skip OpenParams itself
+
+                // Collect params until CloseParams
+                while j < self.tokens.len()
+                    && !matches!(self.tokens[j].token_type, HaplTokenType::CloseParams)
+                {
+                    if let HaplTokenType::OpenParam { ref name, param_type } =
+                        self.tokens[j].token_type.clone()
+                    {
+                        params.push((name.clone(), param_type));
+                    }
+                    j += 1;
+                }
+
+                // entry().or_insert so the real parse_function pass still wins
+                self.function_signatures
+                    .entry(fn_name)
+                    .or_insert(FunctionSignature { params, return_type });
+            }
+            i += 1;
+        }
+        // position is unchanged — pass 2 starts from 0
     }
 
     // --------------------------------------------------
@@ -1037,6 +1136,9 @@ impl HaplParser {
 
         self.push_scope();
 
+        // Track the return type so parse_return can validate it
+        let prev_fn_return_type = self.current_fn_return_type.replace(return_type);
+
         // Pre-declare params inside the function scope
         for (param_name, param_type) in &params {
             self.declare_var(param_name.clone(), *param_type)?;
@@ -1046,6 +1148,9 @@ impl HaplParser {
         while !self.is_at_end() && !matches!(self.current_token(), HaplTokenType::CloseFunctionBody) {
             body.push(self.parse_statement()?);
         }
+
+        // Restore previous return type context before any early returns
+        self.current_fn_return_type = prev_fn_return_type;
 
         if self.is_at_end() {
             self.pop_scope();
@@ -1227,6 +1332,42 @@ impl HaplParser {
 
         self.advance(); // consume CloseReturn
 
+        // Fix 2: validate return type against the enclosing function's declared return type
+        if let Some(expected) = self.current_fn_return_type {
+            // void functions must not return a value
+            if expected == StaticType::Void {
+                return Err(
+                    parser_err(
+                        ErrorCode::TypeMismatch,
+                        "void function cannot return a value",
+                    )
+                    .with_hint(
+                        "declare the function with a non-void return type,                          or remove the return statement",
+                    ),
+                );
+            }
+
+            // non-void functions: check inferred type of the return expression
+            if let Some(actual) = self.infer_type(&value) {
+                if actual != expected {
+                    return Err(
+                        parser_err(
+                            ErrorCode::TypeMismatch,
+                            format!(
+                                "return type mismatch: function declared as {:?} but returns {:?}",
+                                expected, actual
+                            ),
+                        )
+                        .with_hint(format!(
+                            "change the return value to a {:?} expression,                              or update the function's return type",
+                            expected
+                        )),
+                    );
+                }
+            }
+            // infer_type returning None means we can't check statically — runtime handles it
+        }
+
         Ok(Expr::Return {
             value: Some(Box::new(value)),
         })
@@ -1324,6 +1465,13 @@ impl HaplParser {
             Expr::Literal(LiteralValue::Boolean(_)) => Some(StaticType::Boolean),
 
             Expr::VariableReference { name } => self.lookup_var(name),
+
+            // Fix 3: resolve function call return types from the signature map
+            Expr::FunctionCall { name, .. } => {
+                self.function_signatures
+                    .get(name)
+                    .map(|sig| sig.return_type)
+            }
 
             Expr::Operation { op, operands } => {
                 match op {
