@@ -76,7 +76,7 @@ impl HaplParser {
     fn lookup_var(&self, name: &str) -> Option<StaticType> {
         for scope in self.scope_stack.iter().rev() {
             if let Some(t) = scope.get(name) {
-                return Some(*t);
+                return Some(t.clone());
             }
         }
         None
@@ -220,7 +220,7 @@ impl HaplParser {
                     }
                 }
 
-                if self.is_at_end() || !self.check_close_var_dec(var_type_copy, &var_name) {
+                if self.is_at_end() || !self.check_close_var_dec(&var_type_copy, &var_name) {
                     return Err(
                         parser_err(
                             ErrorCode::TagNotClosed,
@@ -236,11 +236,11 @@ impl HaplParser {
                 self.advance(); // consume CloseVarDec
 
                 // Register in current scope (allows shadowing in inner scopes)
-                self.declare_var(var_name.clone(), var_type_copy)?;
+                self.declare_var(var_name.clone(), var_type_copy.clone())?;
 
                 // Type-check literals at parse time
                 if let Expr::Literal(ref lit_val) = *value_expr {
-                    match (var_type_copy, lit_val) {
+                    match (&var_type_copy, lit_val) {
                         (StaticType::Integer, LiteralValue::Integer(_))
                         | (StaticType::Double, LiteralValue::Double(_))
                         | (StaticType::String, LiteralValue::String(_))
@@ -357,7 +357,7 @@ impl HaplParser {
 
                 // If literal, type-check immediately
                 if let Expr::Literal(ref lit_val) = *value_expr {
-                    match (expected_type, lit_val) {
+                    match (&expected_type, lit_val) {
                         (StaticType::Integer, LiteralValue::Integer(_))
                         | (StaticType::Double, LiteralValue::Double(_))
                         | (StaticType::String, LiteralValue::String(_))
@@ -405,6 +405,200 @@ impl HaplParser {
             // Function Call
             // -------------------------
             HaplTokenType::OpenFunctionCall { .. } => self.parse_function_call(),
+
+            // -------------------------
+            // List Declaration
+            // -------------------------
+            HaplTokenType::OpenListDec { elem_type, name } => {
+                let list_name = name.clone();
+                let list_elem_type = elem_type.clone();
+
+                self.advance(); // consume OpenListDec
+
+                let mut elements = Vec::new();
+                while !self.is_at_end() {
+                    if matches!(self.current_token(),
+                        HaplTokenType::CloseListDec { name: ref n } if n == &list_name)
+                    {
+                        break;
+                    }
+                    let elem = self.parse_expression()?;
+                    // Type-check each element at parse time
+                    if let Some(elem_type) = self.infer_type(&elem) {
+                        if elem_type != list_elem_type {
+                            return Err(
+                                parser_err(
+                                    ErrorCode::ListElementTypeMismatch,
+                                    format!(
+                                        "list '{}' expects {:?} elements, got {:?}",
+                                        list_name, list_elem_type, elem_type
+                                    ),
+                                )
+                                .with_hint(format!(
+                                    "all elements in '{}' must be of type {:?}",
+                                    list_name, list_elem_type
+                                )),
+                            );
+                        }
+                    }
+                    elements.push(elem);
+                }
+
+                if self.is_at_end() {
+                    return Err(
+                        parser_err(
+                            ErrorCode::TagNotClosed,
+                            format!("list declaration '{}' was never closed", list_name),
+                        )
+                        .with_hint(format!("add a matching closing tag for list '{}'", list_name)),
+                    );
+                }
+
+                self.advance(); // consume CloseListDec
+
+                self.declare_var(list_name.clone(), StaticType::List(Box::new(list_elem_type.clone())))?;
+
+                Ok(Expr::ListDeclaration {
+                    name: list_name,
+                    elem_type: list_elem_type,
+                    elements,
+                })
+            }
+
+            // -------------------------
+            // List Access (read by index)
+            // -------------------------
+            HaplTokenType::OpenListAccess => {
+                self.advance(); // consume OpenListAccess
+
+                let list_expr = Box::new(self.parse_expression()?);
+                let index_expr = Box::new(self.parse_expression()?);
+
+                // Index must be Integer
+                if let Some(idx_type) = self.infer_type(&index_expr) {
+                    if idx_type != StaticType::Integer {
+                        return Err(
+                            parser_err(
+                                ErrorCode::ListIndexNotInt,
+                                format!("list index must be Integer, got {:?}", idx_type),
+                            )
+                            .with_hint("use an integer literal or integer variable as the index"),
+                        );
+                    }
+                }
+
+                if self.is_at_end() || !matches!(self.current_token(), HaplTokenType::CloseListAccess) {
+                    return Err(
+                        parser_err(
+                            ErrorCode::TagNotClosed,
+                            "list access block was never closed",
+                        )
+                        .with_hint("add a matching closing tag for the <div class=\"index\"> block"),
+                    );
+                }
+
+                self.advance(); // consume CloseListAccess
+
+                Ok(Expr::ListAccess { list: list_expr, index: index_expr })
+            }
+
+            // -------------------------
+            // List Assign (write by index)
+            // -------------------------
+            HaplTokenType::OpenListAssign { name } => {
+                let list_name = name.clone();
+                self.advance(); // consume OpenListAssign
+
+                let _list_ref = self.parse_expression()?; // the <var> reference
+                let index_expr = Box::new(self.parse_expression()?);
+                let value_expr = Box::new(self.parse_expression()?);
+
+                if let Some(idx_type) = self.infer_type(&index_expr) {
+                    if idx_type != StaticType::Integer {
+                        return Err(
+                            parser_err(
+                                ErrorCode::ListIndexNotInt,
+                                format!("list index must be Integer, got {:?}", idx_type),
+                            )
+                            .with_hint("use an integer literal or integer variable as the index"),
+                        );
+                    }
+                }
+
+                if self.is_at_end() || !matches!(
+                    self.current_token(),
+                    HaplTokenType::CloseListAssign { name: ref n } if n == &list_name
+                ) {
+                    return Err(
+                        parser_err(
+                            ErrorCode::TagNotClosed,
+                            format!("list index-assign '{}' was never closed", list_name),
+                        )
+                        .with_hint("add a matching closing tag for the <div class=\"index-assign\"> block"),
+                    );
+                }
+
+                self.advance(); // consume CloseListAssign
+
+                Ok(Expr::ListAssign {
+                    name: list_name,
+                    index: index_expr,
+                    value: value_expr,
+                })
+            }
+
+            // -------------------------
+            // List Push
+            // -------------------------
+            HaplTokenType::OpenListPush { name } => {
+                let list_name = name.clone();
+                self.advance(); // consume OpenListPush
+
+                let _list_ref = self.parse_expression()?; // the <var> reference
+                let value_expr = Box::new(self.parse_expression()?);
+
+                if self.is_at_end() || !matches!(
+                    self.current_token(),
+                    HaplTokenType::CloseListPush { name: ref n } if n == &list_name
+                ) {
+                    return Err(
+                        parser_err(
+                            ErrorCode::TagNotClosed,
+                            format!("list push '{}' was never closed", list_name),
+                        )
+                        .with_hint("add a matching closing tag for the <div class=\"push\"> block"),
+                    );
+                }
+
+                self.advance(); // consume CloseListPush
+
+                Ok(Expr::ListPush { name: list_name, value: value_expr })
+            }
+
+            // -------------------------
+            // List Pop
+            // -------------------------
+            HaplTokenType::OpenListPop { name } => {
+                let list_name = name.clone();
+                self.advance(); // consume OpenListPop
+
+                if self.is_at_end() || !matches!(
+                    self.current_token(),
+                    HaplTokenType::CloseListPop { name: ref n } if n == &list_name
+                ) {
+                    return Err(
+                        parser_err(
+                            ErrorCode::TagNotClosed,
+                            format!("list pop '{}' was never closed", list_name),
+                        )
+                        .with_hint("add a matching closing tag for the <div class=\"pop\"> block"),
+                    );
+                }
+
+                self.advance(); // consume CloseListPop
+
+                Ok(Expr::ListPop { name: list_name })
+            }
 
             other => Err(
                 parser_err(
@@ -471,6 +665,11 @@ impl HaplParser {
             | HaplTokenType::OpenVarRef { .. }
             | HaplTokenType::OpenVarAssign { .. }
             | HaplTokenType::OpenFunctionCall { .. } => self.parse_expression(),
+            | HaplTokenType::OpenListDec { .. }
+            | HaplTokenType::OpenListAccess
+            | HaplTokenType::OpenListAssign { .. }
+            | HaplTokenType::OpenListPush { .. }
+            | HaplTokenType::OpenListPop { .. } => self.parse_expression(),
 
             // Structural HTML wrapper tokens are skipped
             HaplTokenType::OpenHtmlTag { .. } | HaplTokenType::CloseHtmlTag { .. } => {
@@ -1028,7 +1227,7 @@ impl HaplParser {
     // --------------------------------------------------
     fn parse_function(&mut self) -> Result<Expr, HaplError> {
         let (name, return_type) = match self.current_token() {
-            HaplTokenType::OpenFunction { name, return_type } => (name.clone(), return_type),
+            HaplTokenType::OpenFunction { name, return_type } => (name.clone(), return_type.clone()),
             other => {
                 return Err(parser_err(
                     ErrorCode::UnexpectedToken,
@@ -1111,7 +1310,7 @@ impl HaplParser {
             name.clone(),
             FunctionSignature {
                 params:      params.clone(),
-                return_type: return_type,
+                return_type: return_type.clone(),
             },
         );
 
@@ -1136,12 +1335,12 @@ impl HaplParser {
 
         self.push_scope();
 
-        // Track the return type so parse_return can validate it
-        let prev_fn_return_type = self.current_fn_return_type.replace(return_type);
+       // Track the return type so parse_return can validate it
+        let prev_fn_return_type = self.current_fn_return_type.replace(return_type.clone());
 
         // Pre-declare params inside the function scope
         for (param_name, param_type) in &params {
-            self.declare_var(param_name.clone(), *param_type)?;
+            self.declare_var(param_name.clone(), param_type.clone())?;
         }
 
         let mut body = Vec::new();
@@ -1332,10 +1531,9 @@ impl HaplParser {
 
         self.advance(); // consume CloseReturn
 
-        // Fix 2: validate return type against the enclosing function's declared return type
-        if let Some(expected) = self.current_fn_return_type {
+        if let Some(expected) = &self.current_fn_return_type {
             // void functions must not return a value
-            if expected == StaticType::Void {
+            if *expected == StaticType::Void {
                 return Err(
                     parser_err(
                         ErrorCode::TypeMismatch,
@@ -1349,7 +1547,7 @@ impl HaplParser {
 
             // non-void functions: check inferred type of the return expression
             if let Some(actual) = self.infer_type(&value) {
-                if actual != expected {
+                if actual != *expected {
                     return Err(
                         parser_err(
                             ErrorCode::TypeMismatch,
@@ -1401,12 +1599,12 @@ impl HaplParser {
         }
     }
 
-    fn check_close_var_dec(&self, var_type: StaticType, name: &str) -> bool {
+    fn check_close_var_dec(&self, var_type: &StaticType, name: &str) -> bool {
         if self.is_at_end() {
             return false;
         }
         match self.current_token() {
-            HaplTokenType::CloseVarDec { var_type: t, name: n } => t == var_type && n == name,
+            HaplTokenType::CloseVarDec { var_type: t, name: n } => t == *var_type && n == name,
             _ => false,
         }
     }
@@ -1466,11 +1664,10 @@ impl HaplParser {
 
             Expr::VariableReference { name } => self.lookup_var(name),
 
-            // Fix 3: resolve function call return types from the signature map
             Expr::FunctionCall { name, .. } => {
                 self.function_signatures
                     .get(name)
-                    .map(|sig| sig.return_type)
+                    .map(|sig| sig.return_type.clone())
             }
 
             Expr::Operation { op, operands } => {
@@ -1506,6 +1703,12 @@ impl HaplParser {
                     }
                 }
             }
+
+
+            Expr::Literal(LiteralValue::List { elem_type, .. }) => {
+                Some(StaticType::List(Box::new(elem_type.clone())))
+            }
+
 
             _ => None,
         }
