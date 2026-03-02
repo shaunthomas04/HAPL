@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head><title>HAPL List Tests</title></head>
+<body>
+
+    <!-- Test 1: Basic integer list declaration and access -->
+    <div class="integer-list" id="numbers">
+        <span class="integer">10</span>
+        <span class="integer">20</span>
+        <span class="integer">30</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">0</span>
+        </div>
+    </p>
+    <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">2</span>
+        </div>
+    </p>
+
+    <!-- Test 2: String list -->
+    <div class="string-list" id="words">
+        <span class="string">"hello"</span>
+        <span class="string">"world"</span>
+        <span class="string">"hapl"</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="words"></var>
+            <span class="integer">1</span>
+        </div>
+    </p>
+
+    <!-- Test 3: Boolean list -->
+    <div class="boolean-list" id="flags">
+        <span class="boolean">true</span>
+        <span class="boolean">false</span>
+        <span class="boolean">true</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="flags"></var>
+            <span class="integer">0</span>
+        </div>
+    </p>
+
+    <!-- Test 4: Double list -->
+    <div class="double-list" id="prices">
+        <span class="double">1.99</span>
+        <span class="double">2.50</span>
+        <span class="double">9.99</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="prices"></var>
+            <span class="integer">1</span>
+        </div>
+    </p>
+
+    <!-- Test 5: Index assign -->
+    <div class="index-assign">
+        <var class="numbers"></var>
+        <span class="integer">0</span>
+        <span class="integer">99</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">0</span>
+        </div>
+    </p>
+
+    <!-- Test 6: Push -->
+    <div class="push">
+        <var class="numbers"></var>
+        <span class="integer">100</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">3</span>
+        </div>
+    </p>
+
+    <!-- Test 7: Pop -->
+    <div class="pop">
+        <var class="numbers"></var>
+    </div>
+    <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">0</span>
+        </div>
+    </p>
+
+    <!-- Test 8: Empty list then push -->
+    <div class="integer-list" id="empty">
+    </div>
+    <div class="push">
+        <var class="empty"></var>
+        <span class="integer">42</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="empty"></var>
+            <span class="integer">0</span>
+        </div>
+    </p>
+
+    <!-- Test 9: Index with variable -->
+    <var class="integer" id="i">
+        <span class="integer">1</span>
+    </var>
+    <p>
+        <div class="index">
+            <var class="words"></var>
+            <var class="i"></var>
+        </div>
+    </p>
+
+    <!-- Test 10: List access inside arithmetic -->
+    <p>
+        <div class="+">
+            <div class="index">
+                <var class="numbers"></var>
+                <span class="integer">0</span>
+            </div>
+            <span class="integer">1</span>
+        </div>
+    </p>
+
+    <!-- Test 11: Push multiple times then access -->
+    <div class="push">
+        <var class="empty"></var>
+        <span class="integer">1</span>
+    </div>
+    <div class="push">
+        <var class="empty"></var>
+        <span class="integer">2</span>
+    </div>
+    <div class="push">
+        <var class="empty"></var>
+        <span class="integer">3</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="empty"></var>
+            <span class="integer">2</span>
+        </div>
+    </p>
+
+    <!-- Test 12: Pop until one element remains -->
+    <div class="pop">
+        <var class="empty"></var>
+    </div>
+    <div class="pop">
+        <var class="empty"></var>
+    </div>
+    <p>
+        <div class="index">
+            <var class="empty"></var>
+            <span class="integer">0</span>
+        </div>
+    </p>
+
+    <!-- Test 13: List inside a loop — sum all elements -->
+    <var class="integer" id="sum">
+        <span class="integer">0</span>
+    </var>
+    <var class="integer" id="idx">
+        <span class="integer">0</span>
+    </var>
+    <div class="integer-list" id="vals">
+        <span class="integer">1</span>
+        <span class="integer">2</span>
+        <span class="integer">3</span>
+        <span class="integer">4</span>
+        <span class="integer">5</span>
+    </div>
+    <div class="while">
+        <div class="condition">
+            <div class="less">
+                <var class="idx"></var>
+                <span class="integer">5</span>
+            </div>
+        </div>
+        <div class="body">
+            <var class="sum">
+                <div class="+">
+                    <var class="sum"></var>
+                    <div class="index">
+                        <var class="vals"></var>
+                        <var class="idx"></var>
+                    </div>
+                </div>
+            </var>
+            <var class="idx">
+                <div class="+">
+                    <var class="idx"></var>
+                    <span class="integer">1</span>
+                </div>
+            </var>
+        </div>
+    </div>
+    <p><var class="sum"></var></p>
+
+    <!-- Test 14: String list push and access -->
+    <div class="push">
+        <var class="words"></var>
+        <span class="string">"!"</span>
+    </div>
+    <p>
+        <div class="index">
+            <var class="words"></var>
+            <span class="integer">3</span>
+        </div>
+    </p>
+
+    <!-- ERROR Test 1: Index out of bounds -->
+<!--     
+    <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">999</span>
+        </div>
+    </p>
+    -->
+
+    <!-- ERROR Test 2: Pop from empty list -->
+<!--     
+    <div class="integer-list" id="emptyPop">
+    </div>
+    <div class="pop">
+        <var class="emptyPop"></var>
+    </div>
+    -->
+
+    <!-- ERROR Test 3: Wrong element type in list declaration (caught at parse time) -->
+<!--     
+    <div class="integer-list" id="badTypes">
+        <span class="integer">1</span>
+        <span class="string">"oops"</span>
+    </div>
+    -->
+
+    <!-- ERROR Test 4: Index assign out of bounds -->
+    
+    <!-- <div class="index-assign">
+        <var class="numbers"></var>
+        <span class="integer">999</span>
+        <span class="integer">42</span>
+    </div>
+    -->
+
+    <!-- ERROR Test 5: Negative index -->
+    
+    <!-- <p>
+        <div class="index">
+            <var class="numbers"></var>
+            <span class="integer">-1</span>
+        </div>
+    </p> -->
+   
+
+</body>
+</html>

@@ -42,6 +42,7 @@ pub enum ErrorCode {
     BadLoopChild,
     BadFunctionChild,
     StringNotQuoted,
+    BadListChild,          
 
     // Parser  E1xx
     UnexpectedEof,
@@ -55,6 +56,8 @@ pub enum ErrorCode {
     ForIteratorNotInt,
     ForConditionNotBool,
     ForIncrementNotInt,
+    ListElementTypeMismatch, 
+    ListIndexNotInt,         
 
     // Runtime  E2xx
     VariableNotFound,
@@ -65,6 +68,9 @@ pub enum ErrorCode {
     DivisionByZero,
     BadOperatorTypes,
     NotRequiresBool,
+    IndexOutOfBounds,        
+    EmptyList,               
+    ListTypeMismatch,        
 }
 
 impl ErrorCode {
@@ -81,6 +87,7 @@ impl ErrorCode {
             ErrorCode::BadLoopChild            => "E009",
             ErrorCode::BadFunctionChild        => "E010",
             ErrorCode::StringNotQuoted         => "E011",
+            ErrorCode::BadListChild            => "E012",
 
             ErrorCode::UnexpectedEof           => "E101",
             ErrorCode::UnexpectedToken         => "E102",
@@ -93,6 +100,8 @@ impl ErrorCode {
             ErrorCode::ForIteratorNotInt       => "E109",
             ErrorCode::ForConditionNotBool     => "E110",
             ErrorCode::ForIncrementNotInt      => "E111",
+            ErrorCode::ListElementTypeMismatch => "E112",
+            ErrorCode::ListIndexNotInt         => "E113",
 
             ErrorCode::VariableNotFound        => "E201",
             ErrorCode::AssignBeforeDeclare     => "E202",
@@ -102,6 +111,9 @@ impl ErrorCode {
             ErrorCode::DivisionByZero          => "E206",
             ErrorCode::BadOperatorTypes        => "E207",
             ErrorCode::NotRequiresBool         => "E208",
+            ErrorCode::IndexOutOfBounds        => "E209",
+            ErrorCode::EmptyList               => "E210",
+            ErrorCode::ListTypeMismatch        => "E211",
         }
     }
 }
@@ -110,7 +122,6 @@ impl ErrorCode {
 // HaplError
 // ------------------------------------------------------------------
 #[derive(Debug, Clone)]
-
 pub struct HaplError {
     stage:       HaplStage,
     code:        ErrorCode,
@@ -157,8 +168,6 @@ impl HaplError {
         std::process::exit(1);
     }
 }
-
-
 
 impl std::fmt::Display for HaplError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -224,10 +233,7 @@ impl std::fmt::Display for HaplError {
     }
 }
 
-
 impl std::error::Error for HaplError {}
-
-
 
 // ------------------------------------------------------------------
 // Shorthand constructors

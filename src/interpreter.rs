@@ -39,7 +39,7 @@ impl Interpreter {
     }
 
     fn current_scope(&mut self) -> &mut HashMap<String, LiteralValue> {
-        self.scopes.last_mut().unwrap()
+        self.scopes.last_mut().expect("scope stack is empty — this is a bug in the interpreter")
     }
 
     fn lookup(&self, name: &str) -> Result<LiteralValue, HaplError> {
@@ -207,6 +207,10 @@ impl Interpreter {
                     LiteralValue::Double(f)  => println!("{}", f),
                     LiteralValue::String(s)  => println!("{}", s),
                     LiteralValue::Boolean(b) => println!("{}", b),
+                    LiteralValue::List { elements, .. } => {
+                        let items: Vec<String> = elements.iter().map(|e| format!("{:?}", e)).collect();
+                        println!("[{}]", items.join(", "));
+                    }
                 }
                 ControlFlow::Value(val)
             }
@@ -493,6 +497,166 @@ impl Interpreter {
                 };
                 ControlFlow::Return(val)
             }
+        
+            // -------------------------
+            // List Declaration
+            // -------------------------
+            Expr::ListDeclaration { name, elem_type, elements } => {
+                let mut evaled = Vec::new();
+                for elem in elements {
+                    let val = bubble!(self.eval_value(elem));
+                    evaled.push(val);
+                }
+                let list = LiteralValue::List {
+                    elem_type: elem_type.clone(),
+                    elements: evaled,
+                };
+                self.current_scope().insert(name.clone(), list.clone());
+                ControlFlow::Value(list)
+            }
+
+            // -------------------------
+            // List Access
+            // -------------------------
+            Expr::ListAccess { list, index } => {
+                let list_val = bubble!(self.eval_value(list));
+                let index_val = bubble!(self.eval_value(index));
+
+                let idx = match index_val {
+                    LiteralValue::Integer(i) => i,
+                    other => return ControlFlow::Error(
+                        runtime_err(ErrorCode::ListIndexNotInt,
+                            format!("list index must be Integer, got {:?}", other.type_name()))
+                        .with_hint("use an integer as the list index")
+                    ),
+                };
+
+                match list_val {
+                    LiteralValue::List { elements, .. } => {
+                        if idx < 0 || idx as usize >= elements.len() {
+                            return ControlFlow::Error(
+                                runtime_err(ErrorCode::IndexOutOfBounds,
+                                    format!("index {} is out of bounds (length {})", idx, elements.len()))
+                                .with_hint("make sure the index is within the list's length")
+                            );
+                        }
+                        ControlFlow::Value(elements[idx as usize].clone())
+                    }
+                    other => ControlFlow::Error(
+                        runtime_err(ErrorCode::IndexOutOfBounds,
+                            format!("cannot index into {:?}", other.type_name()))
+                        .with_hint("only lists can be indexed")
+                    ),
+                }
+            }
+
+            // -------------------------
+            // List Assign
+            // -------------------------
+            Expr::ListAssign { name, index, value } => {
+                let index_val = bubble!(self.eval_value(index));
+                let new_val = bubble!(self.eval_value(value));
+
+                let idx = match index_val {
+                    LiteralValue::Integer(i) => i,
+                    other => return ControlFlow::Error(
+                        runtime_err(ErrorCode::ListIndexNotInt,
+                            format!("list index must be Integer, got {:?}", other.type_name()))
+                        .with_hint("use an integer as the list index")
+                    ),
+                };
+
+                let list = match self.lookup(name) {
+                    Ok(v) => v,
+                    Err(e) => return ControlFlow::Error(e),
+                };
+
+                match list {
+                    LiteralValue::List { elem_type, mut elements } => {
+                        if idx < 0 || idx as usize >= elements.len() {
+                            return ControlFlow::Error(
+                                runtime_err(ErrorCode::IndexOutOfBounds,
+                                    format!("index {} is out of bounds (length {})", idx, elements.len()))
+                                .with_hint("make sure the index is within the list's length")
+                            );
+                        }
+                        elements[idx as usize] = new_val;
+                        let updated = LiteralValue::List { elem_type, elements };
+                        if let Err(e) = self.assign(name, updated.clone()) {
+                            return ControlFlow::Error(e);
+                        }
+                        ControlFlow::Value(updated)
+                    }
+                    other => ControlFlow::Error(
+                        runtime_err(ErrorCode::IndexOutOfBounds,
+                            format!("cannot index into {:?}", other.type_name()))
+                        .with_hint("only lists can be index-assigned")
+                    ),
+                }
+            }
+
+            // -------------------------
+            // List Push
+            // -------------------------
+            Expr::ListPush { name, value } => {
+                let new_val = bubble!(self.eval_value(value));
+
+                let list = match self.lookup(name) {
+                    Ok(v) => v,
+                    Err(e) => return ControlFlow::Error(e),
+                };
+
+                match list {
+                    LiteralValue::List { elem_type, mut elements } => {
+                        elements.push(new_val);
+                        let updated = LiteralValue::List { elem_type, elements };
+                        if let Err(e) = self.assign(name, updated.clone()) {
+                            return ControlFlow::Error(e);
+                        }
+                        ControlFlow::Value(updated)
+                    }
+                    other => ControlFlow::Error(
+                        runtime_err(ErrorCode::IndexOutOfBounds,
+                            format!("cannot push to {:?}", other.type_name()))
+                        .with_hint("only lists support push")
+                    ),
+                }
+            }
+
+            // -------------------------
+            // List Pop
+            // -------------------------
+            Expr::ListPop { name } => {
+                let list = match self.lookup(name) {
+                    Ok(v) => v,
+                    Err(e) => return ControlFlow::Error(e),
+                };
+
+                match list {
+                    LiteralValue::List { elem_type, mut elements } => {
+                        if elements.is_empty() {
+                            return ControlFlow::Error(
+                                runtime_err(ErrorCode::EmptyList,
+                                    format!("cannot pop from empty list '{}'", name))
+                                .with_hint("check that the list has elements before popping")
+                            );
+                        }
+                        let popped = elements.pop().unwrap();
+                        let updated = LiteralValue::List { elem_type, elements };
+                        if let Err(e) = self.assign(name, updated) {
+                            return ControlFlow::Error(e);
+                        }
+                        ControlFlow::Value(popped)
+                    }
+                    other => ControlFlow::Error(
+                        runtime_err(ErrorCode::EmptyList,
+                            format!("cannot pop from {:?}", other.type_name()))
+                        .with_hint("only lists support pop")
+                    ),
+                }
+            }
+            
+        
         }
     }
 
@@ -731,6 +895,7 @@ impl TypeName for LiteralValue {
             LiteralValue::Double(_)  => "Double",
             LiteralValue::String(_)  => "String",
             LiteralValue::Boolean(_) => "Boolean",
+            LiteralValue::List { .. } => "List",
         }
     }
 }

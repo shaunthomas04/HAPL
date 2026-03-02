@@ -72,6 +72,18 @@ pub enum HaplTokenType {
     CloseReturn,
     OpenArgs,
     CloseArgs,
+
+    // Lists
+    OpenListDec { elem_type: StaticType, name: String },
+    CloseListDec { name: String },
+    OpenListAccess,
+    CloseListAccess,
+    OpenListAssign { name: String },
+    CloseListAssign { name: String },
+    OpenListPush { name: String },
+    CloseListPush { name: String },
+    OpenListPop { name: String },
+    CloseListPop { name: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -248,7 +260,7 @@ impl HaplToken {
 
     pub fn open_param(name: String, param_type: StaticType) -> Self {
         Self::new(
-            HaplTokenType::OpenParam { name: name.clone(), param_type },
+            HaplTokenType::OpenParam { name: name.clone(), param_type: param_type.clone() },
             Some(format!("{:?} {}", param_type, name)),
         )
     }
@@ -287,6 +299,37 @@ impl HaplToken {
 
     pub fn close_args() -> Self {
         Self::new(HaplTokenType::CloseArgs, Some("args".to_string()))
+    }
+
+    pub fn open_list_dec(elem_type: StaticType, name: String) -> Self {
+        Self::new(HaplTokenType::OpenListDec { elem_type, name: name.clone() }, Some(name))
+    }
+    pub fn close_list_dec(name: String) -> Self {
+        Self::new(HaplTokenType::CloseListDec { name: name.clone() }, Some(name))
+    }
+    pub fn open_list_access() -> Self {
+        Self::new(HaplTokenType::OpenListAccess, Some("index".to_string()))
+    }
+    pub fn close_list_access() -> Self {
+        Self::new(HaplTokenType::CloseListAccess, Some("index".to_string()))
+    }
+    pub fn open_list_assign(name: String) -> Self {
+        Self::new(HaplTokenType::OpenListAssign { name: name.clone() }, Some(name))
+    }
+    pub fn close_list_assign(name: String) -> Self {
+        Self::new(HaplTokenType::CloseListAssign { name: name.clone() }, Some(name))
+    }
+    pub fn open_list_push(name: String) -> Self {
+        Self::new(HaplTokenType::OpenListPush { name: name.clone() }, Some(name))
+    }
+    pub fn close_list_push(name: String) -> Self {
+        Self::new(HaplTokenType::CloseListPush { name: name.clone() }, Some(name))
+    }
+    pub fn open_list_pop(name: String) -> Self {
+        Self::new(HaplTokenType::OpenListPop { name: name.clone() }, Some(name))
+    }
+    pub fn close_list_pop(name: String) -> Self {
+        Self::new(HaplTokenType::CloseListPop { name: name.clone() }, Some(name))
     }
 }
 
@@ -394,7 +437,7 @@ impl HaplLexer {
             })?;
 
             self.tokens.push(HaplToken::new(
-                HaplTokenType::OpenVarDec { var_type, name: id.clone() },
+                HaplTokenType::OpenVarDec { var_type: var_type.clone(), name: id.clone() },
                 Some(format!("{} {}", class, id)),
             ));
             for child in &tag.child_tags {
@@ -404,6 +447,7 @@ impl HaplLexer {
                 HaplTokenType::CloseVarDec { var_type, name: id.clone() },
                 Some(format!("{} {}", class, id)),
             ));
+            
         } else if tag.child_tags.is_empty() {
             // Variable reference: <var class="x"></var>
             self.tokens.push(HaplToken::new(
@@ -507,6 +551,25 @@ impl HaplLexer {
             self.tokens.push(HaplToken::close_return());
             return Ok(());
         }
+
+
+        // ---- List declaration ----
+        if let Some(elem_type) = self.parse_list_class(&class) {
+            let name = tag.id.clone().ok_or_else(|| {
+                lexer_err(ErrorCode::MissingId,
+                    format!("list declaration '{}' is missing an id attribute", class))
+                .with_tag(tag_snippet(tag), "id attribute required to name the list")
+                .with_hint(format!("example: <div class=\"{}\" id=\"myList\">", class))
+            })?;
+            return self.walk_list_decl(tag, name, elem_type);
+        }
+
+        // ---- List operations ----
+        if class == "index"        { return self.walk_list_access(tag); }
+        if class == "index-assign" { return self.walk_list_assign(tag); }
+        if class == "push"         { return self.walk_list_push(tag); }
+        if class == "pop"          { return self.walk_list_pop(tag); }
+
 
         // ---- Function declaration ----
         if let Some(return_type) = self.parse_function_class(&class) {
@@ -829,6 +892,89 @@ impl HaplLexer {
         Ok(())
     }
 
+
+
+
+
+    fn walk_list_decl(&mut self, tag: &HtmlTag, name: String, elem_type: StaticType) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::open_list_dec(elem_type, name.clone()));
+        for child in &tag.child_tags {
+            if child.tag_type != "span" {
+                return Err(
+                    lexer_err(ErrorCode::BadListChild,
+                        format!("unexpected <{}> inside list declaration '{}'", child.tag_type, name))
+                    .with_tag(tag_snippet(child), "only literal <span> values are valid inside a list declaration")
+                    .with_hint("example: <span class=\"integer\">42</span>"),
+                );
+            }
+            self.walk(child)?;
+        }
+        self.tokens.push(HaplToken::close_list_dec(name));
+        Ok(())
+    }
+
+    fn walk_list_access(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::open_list_access());
+        for child in &tag.child_tags { self.walk(child)?; }
+        self.tokens.push(HaplToken::close_list_access());
+        Ok(())
+    }
+
+    fn walk_list_assign(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let name = self.extract_list_name(tag, "index-assign")?;
+        self.tokens.push(HaplToken::open_list_assign(name.clone()));
+        for child in &tag.child_tags { self.walk(child)?; }
+        self.tokens.push(HaplToken::close_list_assign(name));
+        Ok(())
+    }
+
+    fn walk_list_push(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let name = self.extract_list_name(tag, "push")?;
+        self.tokens.push(HaplToken::open_list_push(name.clone()));
+        for child in &tag.child_tags { self.walk(child)?; }
+        self.tokens.push(HaplToken::close_list_push(name));
+        Ok(())
+    }
+
+    fn walk_list_pop(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let name = self.extract_list_name(tag, "pop")?;
+        self.tokens.push(HaplToken::open_list_pop(name.clone()));
+        self.tokens.push(HaplToken::close_list_pop(name));
+        Ok(())
+    }
+
+    fn extract_list_name(&self, tag: &HtmlTag, op: &str) -> Result<String, HaplError> {
+        let first = tag.child_tags.first().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingId, format!("<div class=\"{}\"> has no children", op))
+            .with_tag(tag_snippet(tag), "expected a <var> reference as the first child")
+            .with_hint(format!("example: <div class=\"{}\"><var class=\"myList\"></var>...</div>", op))
+        })?;
+        if first.tag_type != "var" {
+            return Err(
+                lexer_err(ErrorCode::UnexpectedToken,
+                    format!("first child of <div class=\"{}\"> must be a <var>, got <{}>", op, first.tag_type))
+                .with_tag(tag_snippet(first), "expected a <var> reference here")
+                .with_hint("the first child must identify the list by name"),
+            );
+        }
+        first.class.clone().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingClass,
+                format!("<var> inside <div class=\"{}\"> is missing a class attribute", op))
+            .with_tag(tag_snippet(first), "class attribute is the list name")
+            .with_hint("example: <var class=\"myList\"></var>")
+        })
+    }
+
+    fn parse_list_class(&self, class: &str) -> Option<StaticType> {
+        match class.strip_suffix("-list")? {
+            "integer" => Some(StaticType::Integer),
+            "double"  => Some(StaticType::Double),
+            "string"  => Some(StaticType::String),
+            "boolean" => Some(StaticType::Boolean),
+            _         => None,
+        }
+    }
+
     // --------------------------------------------------
     // Literal parsing — now takes the whole tag for error context
     // --------------------------------------------------
@@ -1074,6 +1220,33 @@ impl HaplLexer {
                 HaplTokenType::CloseReturn => println!("CloseReturn -> {:?}", token.value),
                 HaplTokenType::OpenArgs => println!("OpenArgs -> {:?}", token.value),
                 HaplTokenType::CloseArgs => println!("CloseArgs -> {:?}", token.value),
+
+                HaplTokenType::OpenListDec { elem_type, name } => {
+                    println!("OpenListDec({:?}, {}) -> {:?}", elem_type, name, token.value);
+                }
+                HaplTokenType::CloseListDec { name } => {
+                    println!("CloseListDec({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenListAccess => println!("OpenListAccess -> {:?}", token.value),
+                HaplTokenType::CloseListAccess => println!("CloseListAccess -> {:?}", token.value),
+                HaplTokenType::OpenListAssign { name } => {
+                    println!("OpenListAssign({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::CloseListAssign { name } => {
+                    println!("CloseListAssign({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenListPush { name } => {
+                    println!("OpenListPush({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::CloseListPush { name } => {
+                    println!("CloseListPush({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::OpenListPop { name } => {
+                    println!("OpenListPop({}) -> {:?}", name, token.value);
+                }
+                HaplTokenType::CloseListPop { name } => {
+                    println!("CloseListPop({}) -> {:?}", name, token.value);
+                }
             }
         }
     }
