@@ -500,7 +500,7 @@ impl HaplLexer {
                     tag_snippet(tag),
                     format!("'{}' is not a valid type", class),
                 )
-                .with_hint("valid types: integer, double, string, boolean")
+                .with_hint("valid types: integer, double, string, boolean, map")
             })?;
 
             self.tokens.push(HaplToken::new(
@@ -638,15 +638,17 @@ impl HaplLexer {
         if class == "pop"          { return self.walk_list_pop(tag); }
 
 
-
         // ---- Map declaration ----
         if class == "map" {
-            let name = tag.id.clone().ok_or_else(|| {
-                lexer_err(ErrorCode::MissingId, "map declaration is missing an id attribute")
-                    .with_tag(tag_snippet(tag), "id attribute required to name the map")
-                    .with_hint("example: <div class=\"map\" id=\"myMap\">")
-            })?;
-            return self.walk_map_dec(tag, name);
+            match tag.id.as_deref() {
+                Some("") | None => {
+                    // anonymous inline map (used as a value inside another map entry)
+                    return self.walk_map_dec(tag, String::new());
+                }
+                Some(name) => {
+                    return self.walk_map_dec(tag, name.to_string());
+                }
+            }
         }
 
         // ---- Map operations ----
@@ -1487,6 +1489,7 @@ fn parse_static_type(class: &str) -> Option<StaticType> {
         "string"  => Some(StaticType::String),
         "boolean" => Some(StaticType::Boolean),
         "void"    => Some(StaticType::Void),
+        "map"     => Some(StaticType::Map),
         _         => None,
     }
 }

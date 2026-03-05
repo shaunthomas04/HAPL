@@ -656,8 +656,10 @@ impl HaplParser {
 
                 self.advance(); // consume CloseMapDec
 
-                self.declare_var(map_name.clone(), StaticType::Map)?;
-
+                if !map_name.is_empty() {
+                    self.declare_var(map_name.clone(), StaticType::Map)?;
+                }
+                
                 Ok(Expr::MapDeclaration {
                     name: map_name,
                     entries,

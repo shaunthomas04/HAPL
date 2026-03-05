@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head><title>Nested Map Tests</title></head>
+<body>
+
+    <!-- Declare a map with a nested map inside -->
+    <div class="map" id="company">
+        <div class="name"><span class="string">"Acme"</span></div>
+        <div class="ceo">
+            <div class="map" id="">
+                <div class="name"><span class="string">"bob"</span></div>
+                <div class="age"><span class="integer">50</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Get the nested ceo map into a variable -->
+    <var class="map" id="ceo">
+        <div class="map-get">
+            <var class="company"></var>
+            <div class="key"><span class="string">"ceo"</span></div>
+        </div>
+    </var>
+
+    <!-- Now get values out of the ceo map -->
+    <var class="string" id="ceo-name">
+        <div class="map-get">
+            <var class="ceo"></var>
+            <div class="key"><span class="string">"name"</span></div>
+        </div>
+    </var>
+
+    <var class="integer" id="ceo-age">
+        <div class="map-get">
+            <var class="ceo"></var>
+            <div class="key"><span class="string">"age"</span></div>
+        </div>
+    </var>
+
+    <!-- Print them -->
+    <p><var class="ceo-name"></var></p>
+    <p><var class="ceo-age"></var></p>
+
+</body>
+</html>
