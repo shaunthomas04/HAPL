@@ -84,6 +84,24 @@ pub enum HaplTokenType {
     CloseListPush { name: String },
     OpenListPop { name: String },
     CloseListPop { name: String },
+
+    // Maps
+    OpenMapDec { name: String },
+    CloseMapDec { name: String },
+    OpenMapGet,
+    CloseMapGet,
+    OpenMapSet { name: String },
+    CloseMapSet { name: String },
+    OpenMapRemove { name: String },
+    CloseMapRemove { name: String },
+    OpenMapContains,
+    CloseMapContains,
+    OpenMapKey,
+    CloseMapKey,
+    OpenMapValue,
+    CloseMapValue,
+    OpenMapEntry { key: String },
+    CloseMapEntry { key: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -331,6 +349,55 @@ impl HaplToken {
     pub fn close_list_pop(name: String) -> Self {
         Self::new(HaplTokenType::CloseListPop { name: name.clone() }, Some(name))
     }
+
+    pub fn open_map_dec(name: String) -> Self {
+        Self::new(HaplTokenType::OpenMapDec { name: name.clone() }, Some(name))
+    }
+    pub fn close_map_dec(name: String) -> Self {
+        Self::new(HaplTokenType::CloseMapDec { name: name.clone() }, Some(name))
+    }
+    pub fn open_map_get() -> Self {
+        Self::new(HaplTokenType::OpenMapGet, Some("map-get".to_string()))
+    }
+    pub fn close_map_get() -> Self {
+        Self::new(HaplTokenType::CloseMapGet, Some("map-get".to_string()))
+    }
+    pub fn open_map_set(name: String) -> Self {
+        Self::new(HaplTokenType::OpenMapSet { name: name.clone() }, Some(name))
+    }
+    pub fn close_map_set(name: String) -> Self {
+        Self::new(HaplTokenType::CloseMapSet { name: name.clone() }, Some(name))
+    }
+    pub fn open_map_remove(name: String) -> Self {
+        Self::new(HaplTokenType::OpenMapRemove { name: name.clone() }, Some(name))
+    }
+    pub fn close_map_remove(name: String) -> Self {
+        Self::new(HaplTokenType::CloseMapRemove { name: name.clone() }, Some(name))
+    }
+    pub fn open_map_contains() -> Self {
+        Self::new(HaplTokenType::OpenMapContains, Some("map-contains".to_string()))
+    }
+    pub fn close_map_contains() -> Self {
+        Self::new(HaplTokenType::CloseMapContains, Some("map-contains".to_string()))
+    }
+    pub fn open_map_key() -> Self {
+        Self::new(HaplTokenType::OpenMapKey, Some("key".to_string()))
+    }
+    pub fn close_map_key() -> Self {
+        Self::new(HaplTokenType::CloseMapKey, Some("key".to_string()))
+    }
+    pub fn open_map_value() -> Self {
+        Self::new(HaplTokenType::OpenMapValue, Some("value".to_string()))
+    }
+    pub fn close_map_value() -> Self {
+        Self::new(HaplTokenType::CloseMapValue, Some("value".to_string()))
+    }
+    pub fn open_map_entry(key: String) -> Self {
+        Self::new(HaplTokenType::OpenMapEntry { key: key.clone() }, Some(key))
+    }
+    pub fn close_map_entry(key: String) -> Self {
+        Self::new(HaplTokenType::CloseMapEntry { key: key.clone() }, Some(key))
+    }
 }
 
 // ------------------------------------------------------------------
@@ -569,6 +636,24 @@ impl HaplLexer {
         if class == "index-assign" { return self.walk_list_assign(tag); }
         if class == "push"         { return self.walk_list_push(tag); }
         if class == "pop"          { return self.walk_list_pop(tag); }
+
+
+
+        // ---- Map declaration ----
+        if class == "map" {
+            let name = tag.id.clone().ok_or_else(|| {
+                lexer_err(ErrorCode::MissingId, "map declaration is missing an id attribute")
+                    .with_tag(tag_snippet(tag), "id attribute required to name the map")
+                    .with_hint("example: <div class=\"map\" id=\"myMap\">")
+            })?;
+            return self.walk_map_dec(tag, name);
+        }
+
+        // ---- Map operations ----
+        if class == "map-get"      { return self.walk_map_get(tag); }
+        if class == "map-contains" { return self.walk_map_contains(tag); }
+        if class == "map-set"      { return self.walk_map_set(tag); }
+        if class == "map-remove"   { return self.walk_map_remove(tag); }
 
 
         // ---- Function declaration ----
@@ -1131,6 +1216,128 @@ impl HaplLexer {
         }
     }
 
+    fn walk_map_dec(&mut self, tag: &HtmlTag, name: String) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::open_map_dec(name.clone()));
+
+        for child in &tag.child_tags {
+            let key = child.class.clone().ok_or_else(|| {
+                lexer_err(ErrorCode::MissingClass,
+                    format!("map entry inside '{}' is missing a class attribute", name))
+                .with_tag(tag_snippet(child), "the class attribute is used as the map key")
+                .with_hint("example: <div class=\"age\"><span class=\"integer\">30</span></div>")
+            })?;
+
+            self.tokens.push(HaplToken::open_map_entry(key.clone()));
+            for grandchild in &child.child_tags {
+                self.walk(grandchild)?;
+            }
+            self.tokens.push(HaplToken::close_map_entry(key));
+        }
+
+        self.tokens.push(HaplToken::close_map_dec(name));
+        Ok(())
+    }
+
+    fn walk_map_get(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::open_map_get());
+        for child in &tag.child_tags {
+            if child.class.as_deref() == Some("key") {
+                self.tokens.push(HaplToken::open_map_key());
+                for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                self.tokens.push(HaplToken::close_map_key());
+            } else {
+                self.walk(child)?;
+            }
+        }
+        self.tokens.push(HaplToken::close_map_get());
+        Ok(())
+    }
+
+    fn walk_map_contains(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::open_map_contains());
+        for child in &tag.child_tags {
+            if child.class.as_deref() == Some("key") {
+                self.tokens.push(HaplToken::open_map_key());
+                for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                self.tokens.push(HaplToken::close_map_key());
+            } else {
+                self.walk(child)?;
+            }
+        }
+        self.tokens.push(HaplToken::close_map_contains());
+        Ok(())
+    }
+
+    fn walk_map_set(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        // first child is the <var> — extract the map name from it
+        let name = self.extract_map_name(tag, "map-set")?;
+        self.tokens.push(HaplToken::open_map_set(name.clone()));
+
+        for child in &tag.child_tags {
+            match child.class.as_deref() {
+                Some("key") => {
+                    self.tokens.push(HaplToken::open_map_key());
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                    self.tokens.push(HaplToken::close_map_key());
+                }
+                Some("value") => {
+                    self.tokens.push(HaplToken::open_map_value());
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                    self.tokens.push(HaplToken::close_map_value());
+                }
+                _ => { self.walk(child)?; }
+            }
+        }
+
+        self.tokens.push(HaplToken::close_map_set(name));
+        Ok(())
+    }
+
+    fn walk_map_remove(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let name = self.extract_map_name(tag, "map-remove")?;
+        self.tokens.push(HaplToken::open_map_remove(name.clone()));
+
+        for child in &tag.child_tags {
+            if child.class.as_deref() == Some("key") {
+                self.tokens.push(HaplToken::open_map_key());
+                for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                self.tokens.push(HaplToken::close_map_key());
+            } else {
+                self.walk(child)?;
+            }
+        }
+
+        self.tokens.push(HaplToken::close_map_remove(name));
+        Ok(())
+    }
+
+    // mirrors extract_list_name — grabs the map variable name from the first <var> child
+    fn extract_map_name(&self, tag: &HtmlTag, op: &str) -> Result<String, HaplError> {
+        let first = tag.child_tags.first().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingId,
+                format!("<div class=\"{}\"> has no children", op))
+            .with_tag(tag_snippet(tag), "expected a <var> reference as the first child")
+            .with_hint(format!("example: <div class=\"{}\"><var class=\"myMap\"></var>...</div>", op))
+        })?;
+
+        if first.tag_type != "var" {
+            return Err(
+                lexer_err(ErrorCode::UnexpectedToken,
+                    format!("first child of <div class=\"{}\"> must be a <var>, got <{}>", op, first.tag_type))
+                .with_tag(tag_snippet(first), "expected a <var> reference here")
+                .with_hint("the first child must identify the map by name")
+            );
+        }
+
+        first.class.clone().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingClass,
+                format!("<var> inside <div class=\"{}\"> is missing a class attribute", op))
+            .with_tag(tag_snippet(first), "class attribute is the map name")
+            .with_hint("example: <var class=\"myMap\"></var>")
+        })
+    }
+
+
     // --------------------------------------------------
     // Debug printer
     // --------------------------------------------------
@@ -1247,6 +1454,22 @@ impl HaplLexer {
                 HaplTokenType::CloseListPop { name } => {
                     println!("CloseListPop({}) -> {:?}", name, token.value);
                 }
+                HaplTokenType::OpenMapDec { name } => println!("OpenMapDec({}) -> {:?}", name, token.value),
+                HaplTokenType::CloseMapDec { name } => println!("CloseMapDec({}) -> {:?}", name, token.value),
+                HaplTokenType::OpenMapGet => println!("OpenMapGet -> {:?}", token.value),
+                HaplTokenType::CloseMapGet => println!("CloseMapGet -> {:?}", token.value),
+                HaplTokenType::OpenMapSet { name } => println!("OpenMapSet({}) -> {:?}", name, token.value),
+                HaplTokenType::CloseMapSet { name } => println!("CloseMapSet({}) -> {:?}", name, token.value),
+                HaplTokenType::OpenMapRemove { name } => println!("OpenMapRemove({}) -> {:?}", name, token.value),
+                HaplTokenType::CloseMapRemove { name } => println!("CloseMapRemove({}) -> {:?}", name, token.value),
+                HaplTokenType::OpenMapContains => println!("OpenMapContains -> {:?}", token.value),
+                HaplTokenType::CloseMapContains => println!("CloseMapContains -> {:?}", token.value),
+                HaplTokenType::OpenMapKey => println!("OpenMapKey -> {:?}", token.value),
+                HaplTokenType::CloseMapKey => println!("CloseMapKey -> {:?}", token.value),
+                HaplTokenType::OpenMapValue => println!("OpenMapValue -> {:?}", token.value),
+                HaplTokenType::CloseMapValue => println!("CloseMapValue -> {:?}", token.value),
+                HaplTokenType::OpenMapEntry { key } => println!("OpenMapEntry({}) -> {:?}", key, token.value),
+                HaplTokenType::CloseMapEntry { key } => println!("CloseMapEntry({}) -> {:?}", key, token.value),
             }
         }
     }
