@@ -1,3 +1,5 @@
+use indexmap::IndexMap;
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Literal value
@@ -9,7 +11,7 @@ pub enum Expr {
         operands: Vec<Expr>,
     },
 
-    /// Variable declaration:
+    /// Variable declaration:   
     /// <var class="integer" id="x">...</var>
     VariableDeclaration {
         name: String,
@@ -28,8 +30,8 @@ pub enum Expr {
 
     /// Conditional (if / elif / else)
     Conditional {
-        if_blocks: Vec<ConditionalBlock>, // first one is the "if", rest are "elif"
-        else_block: Option<Vec<Expr>>,    // optional else statements
+        if_blocks: Vec<ConditionalBlock>,
+        else_block: Option<Vec<Expr>>,
     },
 
     /// Variable reassignment:
@@ -91,23 +93,23 @@ pub enum Expr {
     /// List index access (read):
     /// <div class="index">
     ///     <var class="numbers"></var>
-    ///     <span class="integer">0</span>
+    ///     <div class="key"><span class="integer">0</span></div>
     /// </div>
     ListAccess {
-        list:  Box<Expr>,   // evaluates to a LiteralValue::List
-        index: Box<Expr>,   // must evaluate to Integer
+        list:  Box<Expr>,
+        index: Box<Expr>,
     },
 
     /// List index assignment (write):
     /// <div class="index-assign">
     ///     <var class="numbers"></var>
-    ///     <span class="integer">0</span>
+    ///     <div class="key"><span class="integer">0</span></div>
     ///     <span class="integer">99</span>
     /// </div>
     ListAssign {
-        name:  String,      // variable name of the list
-        index: Box<Expr>,   // must evaluate to Integer
-        value: Box<Expr>,   // must match the list's element type
+        name:  String,
+        index: Box<Expr>,
+        value: Box<Expr>,
     },
 
     /// Push a value onto the end of a list:
@@ -116,8 +118,8 @@ pub enum Expr {
     ///     <span class="integer">4</span>
     /// </div>
     ListPush {
-        name:  String,      // variable name of the list
-        value: Box<Expr>,   // must match the list's element type
+        name:  String,
+        value: Box<Expr>,
     },
 
     /// Pop the last value off a list:
@@ -125,15 +127,67 @@ pub enum Expr {
     ///     <var class="numbers"></var>
     /// </div>
     ListPop {
-        name: String,       // variable name of the list
+        name: String,
+    },
+
+    /// Map declaration:
+    /// <div class="map" id="person">
+    ///     <div class="entry" key="name"><span class="string">"alice"</span></div>
+    ///     <div class="entry" key="age"><span class="integer">30</span></div>
+    /// </div>
+    MapDeclaration {
+        name:    String,
+        entries: Vec<(String, Expr)>,   // key is always a string, value is any Expr
+    },
+
+    /// Map get — read a value by key:
+    /// <div class="map-get">
+    ///     <var class="person"></var>
+    ///     <div class="key"><span class="string">"name"</span></div>
+    /// </div>
+    MapGet {
+        map: Box<Expr>,     // evaluates to LiteralValue::Map
+        key: Box<Expr>,     // evaluates to String
+    },
+
+    /// Map set — insert or update a key:
+    /// <div class="map-set">
+    ///     <var class="person"></var>
+    ///     <div class="key"><span class="string">"age"</span></div>
+    ///     <div class="value"><span class="integer">31</span></div>
+    /// </div>
+    MapSet {
+        name:  String,      // variable name of the map
+        key:   Box<Expr>,   // evaluates to String
+        value: Box<Expr>,   // any type — dynamic like Python
+    },
+
+    /// Map remove — delete a key:
+    /// <div class="map-remove">
+    ///     <var class="person"></var>
+    ///     <div class="key"><span class="string">"age"</span></div>
+    /// </div>
+    MapRemove {
+        name: String,       // variable name of the map
+        key:  Box<Expr>,    // evaluates to String
+    },
+
+    /// Map contains — check if a key exists (returns Boolean):
+    /// <div class="map-contains">
+    ///     <var class="person"></var>
+    ///     <div class="key"><span class="string">"age"</span></div>
+    /// </div>
+    MapContains {
+        map: Box<Expr>,     // evaluates to LiteralValue::Map
+        key: Box<Expr>,     // evaluates to String
     },
 }
 
 /// Represents a single `if` or `elif` block
 #[derive(Debug, Clone)]
 pub struct ConditionalBlock {
-    pub condition:  Expr,       // boolean expression
-    pub statements: Vec<Expr>,  // statements to execute if true
+    pub condition:  Expr,
+    pub statements: Vec<Expr>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -150,12 +204,12 @@ pub enum Operator {
     Not,
 
     // Comparison
-    Equal,          // ==
-    NotEqual,       // !=
-    Less,           // <
-    LessEqual,      // <=
-    Greater,        // >
-    GreaterEqual,   // >=
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
 }
 
 #[derive(Debug, Clone)]
@@ -165,21 +219,26 @@ pub enum LiteralValue {
     String(String),
     Boolean(bool),
     /// A typed, ordered, dynamically-sized list.
-    /// `elem_type` enforces that every element matches the declared type.
     List {
         elem_type: StaticType,
         elements:  Vec<LiteralValue>,
+    },
+    /// A Python-style dynamic map — keys are always Strings,
+    /// values can be any LiteralValue including nested Maps and Lists.
+    Map {
+        entries: IndexMap<String, LiteralValue>,
     },
 }
 
 impl LiteralValue {
     pub fn get_type(&self) -> StaticType {
         match self {
-            LiteralValue::Integer(_)       => StaticType::Integer,
-            LiteralValue::Double(_)        => StaticType::Double,
-            LiteralValue::String(_)        => StaticType::String,
-            LiteralValue::Boolean(_)       => StaticType::Boolean,
+            LiteralValue::Integer(_)             => StaticType::Integer,
+            LiteralValue::Double(_)              => StaticType::Double,
+            LiteralValue::String(_)              => StaticType::String,
+            LiteralValue::Boolean(_)             => StaticType::Boolean,
             LiteralValue::List { elem_type, .. } => StaticType::List(Box::new(elem_type.clone())),
+            LiteralValue::Map { .. }             => StaticType::Map,
         }
     }
 }
@@ -193,9 +252,10 @@ pub enum StaticType {
     Void,
     /// A list whose elements are all of type `elem_type`.
     List(Box<StaticType>),
+    /// A dynamic Python-style map — string keys, any value type.
+    Map,
 }
 
-// Convenience — lets you write StaticType::list_of(StaticType::Integer) etc.
 impl StaticType {
     pub fn list_of(elem_type: StaticType) -> Self {
         StaticType::List(Box::new(elem_type))

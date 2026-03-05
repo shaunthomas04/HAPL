@@ -600,6 +600,259 @@ impl HaplParser {
                 Ok(Expr::ListPop { name: list_name })
             }
 
+            // -------------------------
+            // Map Declaration
+            // -------------------------
+            HaplTokenType::OpenMapDec { name } => {
+                let map_name = name.clone();
+                self.advance(); // consume OpenMapDec
+
+                let mut entries = Vec::new();
+
+                while !self.is_at_end() {
+                    if matches!(self.current_token(),
+                        HaplTokenType::CloseMapDec { name: ref n } if n == &map_name)
+                    {
+                        break;
+                    }
+
+                    // each entry is: OpenMapEntry, value expr, CloseMapEntry
+                    let key = match self.current_token() {
+                        HaplTokenType::OpenMapEntry { key } => key.clone(),
+                        other => {
+                            return Err(parser_err(
+                                ErrorCode::UnexpectedToken,
+                                format!("expected map entry but found '{:?}'", other),
+                            )
+                            .with_hint("example: <div class=\"age\"><span class=\"integer\">30</span></div>"));
+                        }
+                    };
+
+                    self.advance(); // consume OpenMapEntry
+
+                    let value_expr = self.parse_expression()?;
+
+                    if !matches!(self.current_token(),
+                        HaplTokenType::CloseMapEntry { key: ref k } if k == &key)
+                    {
+                        return Err(parser_err(
+                            ErrorCode::TagNotClosed,
+                            format!("map entry '{}' was never closed", key),
+                        )
+                        .with_hint(format!("add a matching closing tag for entry '{}'", key)));
+                    }
+
+                    self.advance(); // consume CloseMapEntry
+                    entries.push((key, value_expr));
+                }
+
+                if self.is_at_end() {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        format!("map declaration '{}' was never closed", map_name),
+                    )
+                    .with_hint(format!("add a matching closing tag for map '{}'", map_name)));
+                }
+
+                self.advance(); // consume CloseMapDec
+
+                if !map_name.is_empty() {
+                    self.declare_var(map_name.clone(), StaticType::Map)?;
+                }
+                
+                Ok(Expr::MapDeclaration {
+                    name: map_name,
+                    entries,
+                })
+            }
+
+            // -------------------------
+            // Map Get
+            // -------------------------
+            HaplTokenType::OpenMapGet => {
+                self.advance(); // consume OpenMapGet
+
+                let map_expr = Box::new(self.parse_expression()?);
+
+                // expect OpenMapKey
+                if !matches!(self.current_token(), HaplTokenType::OpenMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        format!("expected <div class=\"key\"> in map-get but found '{:?}'", self.current_token()),
+                    )
+                    .with_hint("example: <div class=\"key\"><span class=\"string\">\"name\"</span></div>"));
+                }
+                self.advance(); // consume OpenMapKey
+
+                let key_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-get key block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"key\"> block"));
+                }
+                self.advance(); // consume CloseMapKey
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapGet) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-get block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"map-get\"> block"));
+                }
+                self.advance(); // consume CloseMapGet
+
+                Ok(Expr::MapGet { map: map_expr, key: key_expr })
+            }
+
+            // -------------------------
+            // Map Contains
+            // -------------------------
+            HaplTokenType::OpenMapContains => {
+                self.advance(); // consume OpenMapContains
+
+                let map_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::OpenMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        format!("expected <div class=\"key\"> in map-contains but found '{:?}'", self.current_token()),
+                    )
+                    .with_hint("example: <div class=\"key\"><span class=\"string\">\"name\"</span></div>"));
+                }
+                self.advance(); // consume OpenMapKey
+
+                let key_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-contains key block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"key\"> block"));
+                }
+                self.advance(); // consume CloseMapKey
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapContains) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-contains block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"map-contains\"> block"));
+                }
+                self.advance(); // consume CloseMapContains
+
+                Ok(Expr::MapContains { map: map_expr, key: key_expr })
+            }
+
+            // -------------------------
+            // Map Set
+            // -------------------------
+            HaplTokenType::OpenMapSet { name } => {
+                let map_name = name.clone();
+                self.advance(); // consume OpenMapSet
+
+                let _map_ref = self.parse_expression()?; // the <var> reference
+
+                if !matches!(self.current_token(), HaplTokenType::OpenMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        format!("expected <div class=\"key\"> in map-set but found '{:?}'", self.current_token()),
+                    )
+                    .with_hint("example: <div class=\"key\"><span class=\"string\">\"age\"</span></div>"));
+                }
+                self.advance(); // consume OpenMapKey
+
+                let key_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-set key block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"key\"> block"));
+                }
+                self.advance(); // consume CloseMapKey
+
+                if !matches!(self.current_token(), HaplTokenType::OpenMapValue) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        format!("expected <div class=\"value\"> in map-set but found '{:?}'", self.current_token()),
+                    )
+                    .with_hint("example: <div class=\"value\"><span class=\"integer\">31</span></div>"));
+                }
+                self.advance(); // consume OpenMapValue
+
+                let value_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapValue) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-set value block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"value\"> block"));
+                }
+                self.advance(); // consume CloseMapValue
+
+                if !matches!(self.current_token(),
+                    HaplTokenType::CloseMapSet { name: ref n } if n == &map_name)
+                {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        format!("map-set '{}' was never closed", map_name),
+                    )
+                    .with_hint(format!("add a matching closing tag for the map-set block on '{}'", map_name)));
+                }
+                self.advance(); // consume CloseMapSet
+
+                Ok(Expr::MapSet { name: map_name, key: key_expr, value: value_expr })
+            }
+
+            // -------------------------
+            // Map Remove
+            // -------------------------
+            HaplTokenType::OpenMapRemove { name } => {
+                let map_name = name.clone();
+                self.advance(); // consume OpenMapRemove
+
+                let _map_ref = self.parse_expression()?; // the <var> reference
+
+                if !matches!(self.current_token(), HaplTokenType::OpenMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        format!("expected <div class=\"key\"> in map-remove but found '{:?}'", self.current_token()),
+                    )
+                    .with_hint("example: <div class=\"key\"><span class=\"string\">\"age\"</span></div>"));
+                }
+                self.advance(); // consume OpenMapKey
+
+                let key_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseMapKey) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "map-remove key block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"key\"> block"));
+                }
+                self.advance(); // consume CloseMapKey
+
+                if !matches!(self.current_token(),
+                    HaplTokenType::CloseMapRemove { name: ref n } if n == &map_name)
+                {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        format!("map-remove '{}' was never closed", map_name),
+                    )
+                    .with_hint(format!("add a matching closing tag for the map-remove block on '{}'", map_name)));
+                }
+                self.advance(); // consume CloseMapRemove
+
+                Ok(Expr::MapRemove { name: map_name, key: key_expr })
+            }
+
             other => Err(
                 parser_err(
                     ErrorCode::UnexpectedToken,
@@ -676,6 +929,13 @@ impl HaplParser {
                 self.advance();
                 Ok(Expr::Literal(LiteralValue::Boolean(false)))
             }
+
+            | HaplTokenType::OpenMapDec { .. }
+            | HaplTokenType::OpenMapGet
+            | HaplTokenType::OpenMapSet { .. }
+            | HaplTokenType::OpenMapRemove { .. }
+            | HaplTokenType::OpenMapContains => self.parse_expression(),
+
 
             other => Err(
                 parser_err(
@@ -1709,6 +1969,9 @@ impl HaplParser {
                 Some(StaticType::List(Box::new(elem_type.clone())))
             }
 
+            Expr::Literal(LiteralValue::Map { .. }) => Some(StaticType::Map),
+            Expr::MapGet { .. }      => None,
+            Expr::MapContains { .. } => Some(StaticType::Boolean),
 
             _ => None,
         }
