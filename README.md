@@ -5,7 +5,7 @@
 
 > **H**TML **A**s a **P**rogramming **L**anguage — write programs in plain HTML.
 
-HAPL is a programming language implemented in Rust where the source code *is* a valid HTML file. Instead of a custom syntax, HAPL uses standard HTML tags, classes, and IDs to express variables, arithmetic, conditionals, loops, and functions. Open it in a browser and it looks like a webpage. Run it through the HAPL interpreter and it executes as a program.
+HAPL is a programming language implemented in Rust where the source code *is* a valid HTML file. Instead of a custom syntax, HAPL uses standard HTML tags, classes, and IDs to express variables, arithmetic, conditionals, loops, functions, and maps. Open it in a browser and it looks like a webpage. Run it through the HAPL interpreter and it executes as a program.
 
 ---
 
@@ -22,6 +22,7 @@ HAPL is a programming language implemented in Rust where the source code *is* a 
 - [While Loops](#while-loops)
 - [For Loops](#for-loops)
 - [Functions](#functions)
+- [Maps](#maps)
 
 ---
 
@@ -346,7 +347,7 @@ A for loop uses `<div class="for">` with four sections: `iterator`, `condition`,
 
 Declare a function with `<div class="{returnType}-function" id="{functionName}">`. It contains a `<div class="params">` and a `<div class="body">`.
 
-Return types: `integer`, `double`, `string`, `boolean`, `void`
+Return types: `integer`, `double`, `string`, `boolean`, `void`, `map`
 
 ```html
 <div class="void-function" id="greet">
@@ -393,7 +394,7 @@ Use `<div class="return">` inside the function body to return a value.
 
 ### Calling a Function
 
-Call a function with `<div class="{functionName}">`. Pass arguments inside a `<div class="args">`. Arguments can be literals or variable references.
+Call a function with `<div class="{functionName}">`. Pass arguments inside a `<div class="args">`.
 
 ```html
 <!-- greet("Shaun", 25) -->
@@ -403,30 +404,11 @@ Call a function with `<div class="{functionName}">`. Pass arguments inside a `<d
         <span class="integer">25</span>
     </div>
 </div>
-
-<!-- call with variable references -->
-<var class="string" id="myName">
-    <span class="string">"Shaun"</span>
-</var>
-
-<var class="integer" id="myAge">
-    <span class="integer">25</span>
-</var>
-
-<div class="greet">
-    <div class="args">
-        <var class="myName"></var>
-        <var class="myAge"></var>
-    </div>
-</div>
 ```
 
 ### Storing a Return Value
 
-Use a function call as the value expression inside a variable declaration to capture the return value.
-
 ```html
-<!-- result = circumference(7) -->
 <var class="integer" id="result">
     <div class="circumference">
         <div class="args">
@@ -440,61 +422,201 @@ Use a function call as the value expression inside a variable declaration to cap
 </p>
 ```
 
-### Full Example
+---
+
+<a name="maps"></a>
+## Maps
+
+Maps are Python-style dictionaries — string keys with values of any type (integer, double, string, boolean, or even nested maps). Declare a map with `<div class="map" id="{name}">`. Each key-value pair is a child `<div>` whose class is the key name and whose content is the value expression.
+
+### Declaration
 
 ```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>HAPL Demo</title>
-</head>
-<body>
+<div class="map" id="person">
+    <div class="name"><span class="string">"alice"</span></div>
+    <div class="age"><span class="integer">30</span></div>
+    <div class="score"><span class="double">9.5</span></div>
+    <div class="active"><span class="boolean">true</span></div>
+</div>
+```
 
-    <!-- circumference(radius) = 2 * 3 * radius -->
-    <div class="integer-function" id="circumference">
-        <div class="params">
-            <div class="integer-param" id="radius"></div>
+### Get a Value
+
+Use `<div class="map-get">` with a `<var>` reference to the map and a `<div class="key">` containing the key as a string literal.
+
+```html
+<p>
+    <div class="map-get">
+        <var class="person"></var>
+        <div class="key"><span class="string">"name"</span></div>
+    </div>
+</p>
+```
+
+### Store a Value into a Variable
+
+```html
+<var class="string" id="person-name">
+    <div class="map-get">
+        <var class="person"></var>
+        <div class="key"><span class="string">"name"</span></div>
+    </div>
+</var>
+
+<p><var class="person-name"></var></p>
+```
+
+### Set / Update a Value
+
+Use `<div class="map-set">` to insert a new key or update an existing one.
+
+```html
+<!-- update existing key -->
+<div class="map-set">
+    <var class="person"></var>
+    <div class="key"><span class="string">"age"</span></div>
+    <div class="value"><span class="integer">31</span></div>
+</div>
+
+<!-- add a new key -->
+<div class="map-set">
+    <var class="person"></var>
+    <div class="key"><span class="string">"email"</span></div>
+    <div class="value"><span class="string">"alice@email.com"</span></div>
+</div>
+```
+
+### Remove a Key
+
+```html
+<div class="map-remove">
+    <var class="person"></var>
+    <div class="key"><span class="string">"active"</span></div>
+</div>
+```
+
+### Check if a Key Exists
+
+`map-contains` returns a boolean — use it in a conditional or print it directly.
+
+```html
+<!-- prints true or false -->
+<p>
+    <div class="map-contains">
+        <var class="person"></var>
+        <div class="key"><span class="string">"name"</span></div>
+    </div>
+</p>
+
+<!-- safe access pattern -->
+<div class="conditional">
+    <div class="if">
+        <div class="map-contains">
+            <var class="person"></var>
+            <div class="key"><span class="string">"email"</span></div>
         </div>
-        <div class="body">
-            <div class="return">
-                <div class="*">
-                    <span class="integer">2</span>
-                    <div class="*">
-                        <span class="integer">3</span>
-                        <var class="radius"></var>
+        <p>
+            <div class="map-get">
+                <var class="person"></var>
+                <div class="key"><span class="string">"email"</span></div>
+            </div>
+        </p>
+    </div>
+    <div class="else">
+        <p><span class="string">"no email set"</span></p>
+    </div>
+</div>
+```
+
+### Nested Maps
+
+A map value can itself be a map. Declare the inner map inline (with an empty `id`) as the value of a key.
+
+```html
+<div class="map" id="company">
+    <div class="name"><span class="string">"Acme"</span></div>
+    <div class="ceo">
+        <div class="map" id="">
+            <div class="name"><span class="string">"bob"</span></div>
+            <div class="age"><span class="integer">50</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- extract the nested map into a variable -->
+<var class="map" id="ceo">
+    <div class="map-get">
+        <var class="company"></var>
+        <div class="key"><span class="string">"ceo"</span></div>
+    </div>
+</var>
+
+<!-- then access its fields normally -->
+<var class="string" id="ceo-name">
+    <div class="map-get">
+        <var class="ceo"></var>
+        <div class="key"><span class="string">"name"</span></div>
+    </div>
+</var>
+
+<p><var class="ceo-name"></var></p>
+```
+
+### Maps as Function Parameters and Return Values
+
+Maps can be passed to functions and returned from them using the `map-param` and `map-function` types.
+
+```html
+<!-- function that takes a map and returns an updated map -->
+<div class="map-function" id="birthday">
+    <div class="params">
+        <div class="map-param" id="person"></div>
+    </div>
+    <div class="body">
+        <div class="map-set">
+            <var class="person"></var>
+            <div class="key"><span class="string">"age"</span></div>
+            <div class="value">
+                <div class="+">
+                    <div class="map-get">
+                        <var class="person"></var>
+                        <div class="key"><span class="string">"age"</span></div>
                     </div>
+                    <span class="integer">1</span>
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- myRadius = 7 -->
-    <var class="integer" id="myRadius">
-        <span class="integer">7</span>
-    </var>
-
-    <!-- result = circumference(myRadius) -->
-    <var class="integer" id="result">
-        <div class="circumference">
-            <div class="args">
-                <var class="myRadius"></var>
-            </div>
+        <div class="return">
+            <var class="person"></var>
         </div>
-    </var>
+    </div>
+</div>
 
-    <!-- print result -->
-    <p>
-        <var class="result"></var>
-    </p>
+<!-- call it and store the result -->
+<div class="map" id="alice">
+    <div class="name"><span class="string">"alice"</span></div>
+    <div class="age"><span class="integer">30</span></div>
+</div>
 
-</body>
-</html>
+<var class="map" id="updated">
+    <div class="birthday">
+        <div class="args">
+            <var class="alice"></var>
+        </div>
+    </div>
+</var>
+
+<var class="integer" id="new-age">
+    <div class="map-get">
+        <var class="updated"></var>
+        <div class="key"><span class="string">"age"</span></div>
+    </div>
+</var>
+
+<p><var class="new-age"></var></p>
 ```
 
 Output:
 ```
-42
+31
 ```
-
----
