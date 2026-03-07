@@ -936,6 +936,17 @@ impl Interpreter {
                     }
                     Ok(LiteralValue::Integer(a / b))
                 }
+                Operator::Modulo => {
+                    if *b == 0 {
+                        return Err(runtime_err(
+                            ErrorCode::DivisionByZero,
+                            "modulo by zero",
+                        )
+                        .with_hint("check that the divisor is never zero before using modulo"));
+                    }
+                    Ok(LiteralValue::Integer(a % b))
+                }
+
                 Operator::Equal        => Ok(LiteralValue::Boolean(a == b)),
                 Operator::NotEqual     => Ok(LiteralValue::Boolean(a != b)),
                 Operator::Less         => Ok(LiteralValue::Boolean(a < b)),
@@ -967,6 +978,7 @@ impl Interpreter {
                     }
                     Ok(LiteralValue::Double(a / b))
                 }
+                
                 Operator::Equal        => Ok(LiteralValue::Boolean(a == b)),
                 Operator::NotEqual     => Ok(LiteralValue::Boolean(a != b)),
                 Operator::Less         => Ok(LiteralValue::Boolean(a < b)),
@@ -1066,6 +1078,7 @@ fn op_name(op: &Operator) -> &'static str {
         Operator::Subtract     => "-",
         Operator::Multiply     => "*",
         Operator::Divide       => "/",
+        Operator::Modulo       => "%",
         Operator::And          => "&&",
         Operator::Or           => "||",
         Operator::Not          => "!",

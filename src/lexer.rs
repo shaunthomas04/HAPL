@@ -8,6 +8,7 @@ pub enum LexerTagType {
     Subtract,
     Multiply,
     Divide,
+    Modulo,
     And,
     Or,
     Not,
@@ -1166,6 +1167,8 @@ impl HaplLexer {
             "-" => LexerTagType::Subtract,
             "*" => LexerTagType::Multiply,
             "/" => LexerTagType::Divide,
+            "%" => LexerTagType::Modulo,
+
             _   => return None,
         };
         Some((HaplToken::open_operator(tag_type), HaplToken::close_operator(tag_type)))
@@ -1202,6 +1205,7 @@ impl HaplLexer {
             "string"  => Some(StaticType::String),
             "boolean" => Some(StaticType::Boolean),
             "void"    => Some(StaticType::Void),
+            "map"     => Some(StaticType::Map),
             _         => None,
         }
     }
@@ -1214,6 +1218,7 @@ impl HaplLexer {
             "string"  => Some(StaticType::String),
             "boolean" => Some(StaticType::Boolean),
             "void"    => Some(StaticType::Void),
+            "map"     => Some(StaticType::Map),
             _         => None,
         }
     }
@@ -1500,6 +1505,7 @@ fn operator_to_str(op: LexerTagType) -> &'static str {
         LexerTagType::Subtract     => "-",
         LexerTagType::Multiply     => "*",
         LexerTagType::Divide       => "/",
+        LexerTagType::Modulo       => "%",
         LexerTagType::And          => "&&",
         LexerTagType::Or           => "||",
         LexerTagType::Not          => "!",

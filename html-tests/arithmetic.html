@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head><title>Arithmetic Tests</title></head>
+<body>
+
+    <!-- Addition -->
+    <p><div class="+">
+        <span class="integer">10</span>
+        <span class="integer">5</span>
+    </div></p>
+
+    <!-- Subtraction -->
+    <p><div class="-">
+        <span class="integer">10</span>
+        <span class="integer">5</span>
+    </div></p>
+
+    <!-- Multiplication -->
+    <p><div class="*">
+        <span class="integer">10</span>
+        <span class="integer">5</span>
+    </div></p>
+
+    <!-- Division -->
+    <p><div class="/">
+        <span class="integer">10</span>
+        <span class="integer">5</span>
+    </div></p>
+
+    <!-- Modulo -->
+    <p><div class="%">
+        <span class="integer">10</span>
+        <span class="integer">3</span>
+    </div></p>
+
+    <!-- Mixed integer and double -->
+    <p><div class="+">
+        <span class="integer">5</span>
+        <span class="double">2.5</span>
+    </div></p>
+
+    <!-- Negative result -->
+    <p><div class="-">
+        <span class="integer">3</span>
+        <span class="integer">10</span>
+    </div></p>
+
+    <!-- Nested operations: (2 + 3) * 4 -->
+    <p><div class="*">
+        <div class="+">
+            <span class="integer">2</span>
+            <span class="integer">3</span>
+        </div>
+        <span class="integer">4</span>
+    </div></p>
+
+    <!-- Modulo edge case: even number mod 2 = 0 -->
+    <p><div class="%">
+        <span class="integer">8</span>
+        <span class="integer">2</span>
+    </div></p>
+
+    <!-- Division producing a double -->
+    <p><div class="/">
+        <span class="double">7.0</span>
+        <span class="double">2.0</span>
+    </div></p>
+
+</body>
+</html>

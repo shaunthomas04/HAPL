@@ -41,5 +41,57 @@
     <p><var class="ceo-name"></var></p>
     <p><var class="ceo-age"></var></p>
 
+
+    <!-- Function that takes a map and returns it with an updated value -->
+    <div class="map-function" id="birthday">
+        <div class="params">
+            <div class="map-param" id="person"></div>
+        </div>
+        <div class="body">
+            <div class="map-set">
+                <var class="person"></var>
+                <div class="key"><span class="string">"age"</span></div>
+                <div class="value">
+                    <div class="+">
+                        <div class="map-get">
+                            <var class="person"></var>
+                            <div class="key"><span class="string">"age"</span></div>
+                        </div>
+                        <span class="integer">1</span>
+                    </div>
+                </div>
+            </div>
+            <div class="return">
+                <var class="person"></var>
+            </div>
+        </div>
+    </div>
+
+    <!-- Declare a map -->
+    <div class="map" id="alice">
+        <div class="name"><span class="string">"alice"</span></div>
+        <div class="age"><span class="integer">30</span></div>
+    </div>
+
+    <!-- Call the function and store the result -->
+    <var class="map" id="updated">
+        <div class="birthday">
+            <div class="args">
+                <var class="alice"></var>
+            </div>
+        </div>
+    </var>
+
+    <!-- Print the updated age -->
+    <var class="integer" id="new-age">
+        <div class="map-get">
+            <var class="updated"></var>
+            <div class="key"><span class="string">"age"</span></div>
+        </div>
+    </var>
+
+    <p><var class="new-age"></var></p>
+    
+
 </body>
 </html>

@@ -1885,6 +1885,7 @@ impl HaplParser {
             LexerTagType::Subtract     => Operator::Subtract,
             LexerTagType::Multiply     => Operator::Multiply,
             LexerTagType::Divide       => Operator::Divide,
+            LexerTagType::Modulo => Operator::Modulo,
             LexerTagType::And          => Operator::And,
             LexerTagType::Or           => Operator::Or,
             LexerTagType::Not          => Operator::Not,
@@ -1903,6 +1904,7 @@ impl HaplParser {
             LexerTagType::Subtract     => "-",
             LexerTagType::Multiply     => "*",
             LexerTagType::Divide       => "/",
+            LexerTagType::Modulo       => "%",
             LexerTagType::And          => "&&",
             LexerTagType::Or           => "||",
             LexerTagType::Not          => "!",
@@ -1945,7 +1947,8 @@ impl HaplParser {
                     Operator::Add
                     | Operator::Subtract
                     | Operator::Multiply
-                    | Operator::Divide => {
+                    | Operator::Divide
+                    | Operator::Modulo => {
                         let mut result_type = None;
                         for operand in operands {
                             match self.infer_type(operand) {
@@ -1970,7 +1973,7 @@ impl HaplParser {
             }
 
             Expr::Literal(LiteralValue::Map { .. }) => Some(StaticType::Map),
-            Expr::MapGet { .. }      => None,
+            Expr::MapGet { .. } => Some(StaticType::Map),
             Expr::MapContains { .. } => Some(StaticType::Boolean),
 
             _ => None,

@@ -197,7 +197,8 @@ pub enum Operator {
     Subtract,
     Multiply,
     Divide,
-
+    Modulo,
+    
     // Logical
     Or,
     And,
