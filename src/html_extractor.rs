@@ -121,7 +121,7 @@ pub fn parse_html_to_tags(input: &str) -> Vec<HtmlTag> {
     tags
 }
 
-// ✅ NEW: Proper nested tag matcher
+// nested tag matcher
 fn find_matching_closing_tag(input: &str, tag_name: &str) -> Option<usize> {
     let open_pattern = format!("<{}", tag_name);
     let close_pattern = format!("</{}>", tag_name);
@@ -179,15 +179,20 @@ fn extract_id_attribute(raw_tag: &str) -> Option<String> {
 }
 
 fn extract_class_attribute(raw_tag: &str) -> Option<String> {
-    for part in raw_tag.split_whitespace() {
-        if let Some(value) = part.strip_prefix("class=") {
-            if value.starts_with('"') && value.ends_with('"') {
-                let inner = &value[1..value.len() - 1];
-                if !inner.is_empty() && !inner.contains('"') {
-                    return Some(inner.to_string());
-                }
-            }
-        }
+    let class_pos = raw_tag.find("class")?;
+    let after_class = &raw_tag[class_pos + 5..];
+
+    let eq_pos = after_class.find('=')?;
+    let mut value = after_class[eq_pos + 1..].trim_start();
+
+    let quote = value.chars().next()?;
+    if quote != '"' && quote != '\'' {
+        return None;
     }
-    None
+
+    value = &value[1..];
+    let end = value.find(quote)?;
+    let classes = &value[..end];
+
+    classes.split_whitespace().next().map(|c| c.to_string())
 }
