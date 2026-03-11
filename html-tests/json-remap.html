@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head><title>Remap Test</title></head>
+<body>
+
+    <!-- "zahl" instead of "integer", "text" instead of "string" -->
+    <var class="zahl" id="age">
+        <span class="zahl">25</span>
+    </var>
+
+    <var class="text" id="name">
+        <span class="text">"alice"</span>
+    </var>
+
+    <!-- "add" instead of "+", but using default "integer" type -->
+    <var class="zahl" id="next-age">
+        <div class="add">
+            <var class="age"></var>
+            <span class="zahl">1</span>
+        </div>
+    </var>
+
+    <!-- "objekt" instead of "map", default "string" still works for key -->
+    <div class="objekt" id="person">
+        <div class="name"><span class="text">"bob"</span></div>
+        <div class="age"><span class="zahl">30</span></div>
+    </div>
+
+    <!-- "fetch" instead of "map-get" -->
+    <var class="text" id="person-name">
+        <div class="fetch">
+            <var class="person"></var>
+            <div class="key"><span class="text">"name"</span></div>
+        </div>
+    </var>
+
+    <!-- "store" instead of "map-set" using default keyword "key" and "value" -->
+    <div class="store">
+        <var class="person"></var>
+        <div class="key"><span class="text">"city"</span></div>
+        <div class="value"><span class="string">"london"</span></div>
+    </div>
+
+    <!-- "size" instead of "length" -->
+    <var class="zahl" id="map-size">
+        <div class="size">
+            <var class="person"></var>
+        </div>
+    </var>
+
+    <!-- default keywords still work — normal integer arithmetic -->
+    <var class="integer" id="doubled">
+        <div class="*">
+            <var class="age"></var>
+            <span class="integer">2</span>
+        </div>
+    </var>
+
+    <!-- default map-contains still works -->
+    <var class="boolean" id="has-city">
+        <div class="map-contains">
+            <var class="person"></var>
+            <div class="key"><span class="string">"city"</span></div>
+        </div>
+    </var>
+
+    <p><var class="age"></var></p>
+    <p><var class="next-age"></var></p>
+    <p><var class="name"></var></p>
+    <p><var class="person-name"></var></p>
+    <p><var class="map-size"></var></p>
+    <p><var class="doubled"></var></p>
+    <p><var class="has-city"></var></p>
+
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+    "keywords": {
+        "integer": "zahl",
+        "string": "text",
+        "map-get": "fetch",
+        "map-set": "store",
+        "length": "size",
+        "+": "add",
+        "map": "objekt"
+    }
+}
