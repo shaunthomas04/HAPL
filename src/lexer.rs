@@ -1,6 +1,7 @@
-use crate::HtmlTag;
+use crate::{HtmlTag};
 use crate::ast::{LiteralValue, StaticType};
 use crate::error::{ErrorCode, HaplError, lexer_err};
+use crate::config::{HaplConfig};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LexerTagType {
@@ -425,11 +426,17 @@ fn tag_snippet(tag: &HtmlTag) -> String {
 
 pub struct HaplLexer {
     tokens: Vec<HaplToken>,
+    config: Option<HaplConfig>,
+
 }
 
 impl HaplLexer {
     pub fn new() -> Self {
-        Self { tokens: Vec::new() }
+        Self { tokens: Vec::new(), config: None }
+    }
+
+    pub fn with_config(config: HaplConfig) -> Self {
+        Self { tokens: Vec::new(), config: Some(config) }
     }
 
     /// Lex the tag tree, returning `Err(HaplError)` on the first error.
@@ -488,7 +495,7 @@ impl HaplLexer {
     // <var> → Variable declaration, reference, or assignment
     // --------------------------------------------------
     fn walk_var(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
-        let class = tag.class.as_ref().ok_or_else(|| {
+        let raw_class = tag.class.as_ref().ok_or_else(|| {
             lexer_err(
                 ErrorCode::MissingClass,
                 "missing class attribute on <var> tag",
@@ -500,9 +507,24 @@ impl HaplLexer {
             .with_hint("example: <var class=\"integer\" id=\"x\">10</var>")
         })?;
 
+        let class = self.resolve(raw_class).to_string();
+        
+        
+        // let class = tag.class.as_ref().ok_or_else(|| {
+        //     lexer_err(
+        //         ErrorCode::MissingClass,
+        //         "missing class attribute on <var> tag",
+        //     )
+        //     .with_tag(
+        //         tag_snippet(tag),
+        //         "expected class=\"<type>\" for declaration or class=\"<name>\" for reference",
+        //     )
+        //     .with_hint("example: <var class=\"integer\" id=\"x\">10</var>")
+        // })?;
+
         if let Some(id) = &tag.id {
             // Variable declaration: <var class="integer" id="x">10</var>
-            let var_type = parse_static_type(class).ok_or_else(|| {
+            let var_type = parse_static_type(&class).ok_or_else(|| {
                 lexer_err(
                     ErrorCode::UnknownType,
                     format!("unknown type '{}' in variable declaration", class),
@@ -556,7 +578,7 @@ impl HaplLexer {
     // --------------------------------------------------
     // <span> → Literal value
     // --------------------------------------------------
-    fn walk_span(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+   fn walk_span(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         if tag.child_tags.is_empty() && !tag.content.trim().is_empty() {
             let token = self.parse_literal(tag)?;
             self.tokens.push(token);
@@ -572,7 +594,7 @@ impl HaplLexer {
     // <div> → All language constructs
     // --------------------------------------------------
     fn walk_div(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
-        let class = tag.class.as_ref().ok_or_else(|| {
+        let raw_class = tag.class.as_ref().ok_or_else(|| {
             lexer_err(
                 ErrorCode::MissingClass,
                 "missing class attribute on <div> tag",
@@ -580,6 +602,17 @@ impl HaplLexer {
             .with_tag(tag_snippet(tag), "every <div> must have a class")
             .with_hint("example: <div class=\"+\"> ... </div>")
         })?.clone();
+
+        let class = self.resolve(&raw_class).to_string();
+
+        // let class = tag.class.as_ref().ok_or_else(|| {
+        //     lexer_err(
+        //         ErrorCode::MissingClass,
+        //         "missing class attribute on <div> tag",
+        //     )
+        //     .with_tag(tag_snippet(tag), "every <div> must have a class")
+        //     .with_hint("example: <div class=\"+\"> ... </div>")
+        // })?.clone();
 
         // ---- Arithmetic operators ----
         if let Some((open, close)) = self.try_arithmetic_tokens(&class) {
@@ -1083,20 +1116,36 @@ impl HaplLexer {
     fn parse_literal(&self, tag: &HtmlTag) -> Result<HaplToken, HaplError> {
         let trimmed = tag.content.trim();
 
-        let class = tag.class.as_deref().ok_or_else(|| {
-            lexer_err(
-                ErrorCode::MissingClass,
-                format!(
-                    "literal tag containing '{}' has no class attribute",
-                    trimmed
-                ),
-            )
-            .with_tag(
-                tag_snippet(tag),
-                "class attribute required to identify the type",
-            )
-            .with_hint("example: <span class=\"integer\">42</span>")
-        })?;
+        // let class = tag.class.as_deref().ok_or_else(|| {
+        //     lexer_err(
+        //         ErrorCode::MissingClass,
+        //         format!(
+        //             "literal tag containing '{}' has no class attribute",
+        //             trimmed
+        //         ),
+        //     )
+        //     .with_tag(
+        //         tag_snippet(tag),
+        //         "class attribute required to identify the type",
+        //     )
+        //     .with_hint("example: <span class=\"integer\">42</span>")
+        // })?;
+        let raw_class = tag.class.as_deref().ok_or_else(|| {
+        lexer_err(
+            ErrorCode::MissingClass,
+            format!(
+                "literal tag containing '{}' has no class attribute",
+                trimmed
+            ),
+        )
+        .with_tag(
+            tag_snippet(tag),
+            "class attribute required to identify the type",
+        )
+        .with_hint("example: <span class=\"integer\">42</span>")
+    })?;
+    let class = self.resolve(raw_class);
+
 
         match class {
             "integer" => trimmed.parse::<i64>().map(HaplToken::integer).map_err(|_| {
@@ -1371,6 +1420,12 @@ impl HaplLexer {
             Some("length".to_string()),
         ));
         Ok(())
+    }
+
+    fn resolve<'a>(&'a self, class: &'a str) -> &'a str {
+        self.config.as_ref()
+            .map(|c| c.resolve(class))
+            .unwrap_or(class)
     }
 
     // --------------------------------------------------

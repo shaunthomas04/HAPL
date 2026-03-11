@@ -13,6 +13,7 @@ pub enum HaplStage {
     Lexer,
     Parser,
     Runtime,
+    Config
 }
 
 impl std::fmt::Display for HaplStage {
@@ -21,6 +22,7 @@ impl std::fmt::Display for HaplStage {
             HaplStage::Lexer   => write!(f, "Lexer"),
             HaplStage::Parser  => write!(f, "Parser"),
             HaplStage::Runtime => write!(f, "Runtime"),
+            HaplStage::Config  => write!(f, "Config"),
         }
     }
 }
@@ -70,7 +72,17 @@ pub enum ErrorCode {
     NotRequiresBool,
     IndexOutOfBounds,        
     EmptyList,               
-    ListTypeMismatch,        
+    ListTypeMismatch,     
+
+    // Config  E3xx
+    ConfigFileNotFound,
+    ConfigInvalidJson,
+    ConfigInvalidStructure,
+    ConfigInvalidKeyword,
+    ConfigDuplicateAlias,
+    ConfigMissingPath,
+    ConfigNotJsonFile,
+    ConfigEmptyAlias,   
 }
 
 impl ErrorCode {
@@ -114,6 +126,15 @@ impl ErrorCode {
             ErrorCode::IndexOutOfBounds        => "E209",
             ErrorCode::EmptyList               => "E210",
             ErrorCode::ListTypeMismatch        => "E211",
+
+            ErrorCode::ConfigFileNotFound    => "E301",
+            ErrorCode::ConfigInvalidJson     => "E302",
+            ErrorCode::ConfigInvalidStructure => "E303",
+            ErrorCode::ConfigInvalidKeyword  => "E304",
+            ErrorCode::ConfigDuplicateAlias  => "E305",
+            ErrorCode::ConfigMissingPath     => "E306",
+            ErrorCode::ConfigNotJsonFile     => "E307",
+            ErrorCode::ConfigEmptyAlias      => "E308",
         }
     }
 }
@@ -248,4 +269,8 @@ pub fn parser_err(code: ErrorCode, msg: impl Into<String>) -> HaplError {
 
 pub fn runtime_err(code: ErrorCode, msg: impl Into<String>) -> HaplError {
     HaplError::new(HaplStage::Runtime, code, msg)
+}
+
+pub fn config_err(code: ErrorCode, msg: impl Into<String>) -> HaplError {
+    HaplError::new(HaplStage::Config, code, msg)
 }
