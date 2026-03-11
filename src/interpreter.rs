@@ -852,6 +852,31 @@ impl Interpreter {
                 }
             }
 
+            // -------------------------
+            // Length
+            // -------------------------
+            Expr::Length { value } => {
+                let val = bubble!(self.eval_value(value));
+                match val {
+                    LiteralValue::List { elements, .. } => {
+                        ControlFlow::Value(LiteralValue::Integer(elements.len() as i64))
+                    }
+                    LiteralValue::Map { entries } => {
+                        ControlFlow::Value(LiteralValue::Integer(entries.len() as i64))
+                    }
+                    LiteralValue::String(s) => {
+                        ControlFlow::Value(LiteralValue::Integer(s.len() as i64))
+                    }
+                    other => ControlFlow::Error(
+                        runtime_err(
+                            ErrorCode::BadOperatorTypes,
+                            format!("length is not supported for {:?}", other.type_name()),
+                        )
+                        .with_hint("length can only be used on a list, map, or string"),
+                    ),
+                }
+            }
+
         }
     }
 

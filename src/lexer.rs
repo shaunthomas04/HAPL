@@ -103,6 +103,9 @@ pub enum HaplTokenType {
     CloseMapValue,
     OpenMapEntry { key: String },
     CloseMapEntry { key: String },
+
+    OpenLength,
+    CloseLength,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -399,6 +402,13 @@ impl HaplToken {
     pub fn close_map_entry(key: String) -> Self {
         Self::new(HaplTokenType::CloseMapEntry { key: key.clone() }, Some(key))
     }
+
+    pub fn open_length() -> Self {
+        Self::new(HaplTokenType::OpenLength, Some("length".to_string()))
+    }
+    pub fn close_length() -> Self {
+        Self::new(HaplTokenType::CloseLength, Some("length".to_string()))
+    }
 }
 
 // ------------------------------------------------------------------
@@ -676,6 +686,10 @@ impl HaplLexer {
                 ))
             })?;
             return self.walk_function_decl(tag, name, return_type);
+        }
+
+        if class == "length" {
+            return self.walk_length(tag);
         }
 
         // ---- Function call ----
@@ -1344,6 +1358,20 @@ impl HaplLexer {
         })
     }
 
+    fn walk_length(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::new(
+            HaplTokenType::OpenLength,
+            Some("length".to_string()),
+        ));
+        for child in &tag.child_tags {
+            self.walk(child)?;
+        }
+        self.tokens.push(HaplToken::new(
+            HaplTokenType::CloseLength,
+            Some("length".to_string()),
+        ));
+        Ok(())
+    }
 
     // --------------------------------------------------
     // Debug printer
@@ -1477,6 +1505,9 @@ impl HaplLexer {
                 HaplTokenType::CloseMapValue => println!("CloseMapValue -> {:?}", token.value),
                 HaplTokenType::OpenMapEntry { key } => println!("OpenMapEntry({}) -> {:?}", key, token.value),
                 HaplTokenType::CloseMapEntry { key } => println!("CloseMapEntry({}) -> {:?}", key, token.value),
+                HaplTokenType::OpenLength  => println!("OpenLength -> {:?}", token.value),
+                HaplTokenType::CloseLength => println!("CloseLength -> {:?}", token.value),
+
             }
         }
     }
