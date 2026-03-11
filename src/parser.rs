@@ -853,6 +853,28 @@ impl HaplParser {
                 Ok(Expr::MapRemove { name: map_name, key: key_expr })
             }
 
+
+            // -------------------------
+            // Length
+            // -------------------------
+            HaplTokenType::OpenLength => {
+                self.advance(); // consume OpenLength
+
+                let value_expr = Box::new(self.parse_expression()?);
+
+                if self.is_at_end() || !matches!(self.current_token(), HaplTokenType::CloseLength) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "length block was never closed",
+                    )
+                    .with_hint("add a matching closing tag for the <div class=\"length\"> block"));
+                }
+
+                self.advance(); // consume CloseLength
+
+                Ok(Expr::Length { value: value_expr })
+            }
+
             other => Err(
                 parser_err(
                     ErrorCode::UnexpectedToken,
@@ -923,6 +945,7 @@ impl HaplParser {
             | HaplTokenType::OpenListAssign { .. }
             | HaplTokenType::OpenListPush { .. }
             | HaplTokenType::OpenListPop { .. } => self.parse_expression(),
+            | HaplTokenType::OpenLength => self.parse_expression(),
 
             // Structural HTML wrapper tokens are skipped
             HaplTokenType::OpenHtmlTag { .. } | HaplTokenType::CloseHtmlTag { .. } => {
@@ -1975,6 +1998,7 @@ impl HaplParser {
             Expr::Literal(LiteralValue::Map { .. }) => Some(StaticType::Map),
             Expr::MapGet { .. } => Some(StaticType::Map),
             Expr::MapContains { .. } => Some(StaticType::Boolean),
+            Expr::Length { .. } => Some(StaticType::Integer),
 
             _ => None,
         }

@@ -181,6 +181,14 @@ pub enum Expr {
         map: Box<Expr>,     // evaluates to LiteralValue::Map
         key: Box<Expr>,     // evaluates to String
     },
+
+    /// Get the length of a list, map, or string:
+    /// <div class="length">
+    ///     <var class="myList"></var>
+    /// </div>
+    Length {
+        value: Box<Expr>,
+    },
 }
 
 /// Represents a single `if` or `elif` block
