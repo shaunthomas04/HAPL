@@ -83,6 +83,10 @@ pub enum ErrorCode {
     ConfigMissingPath,
     ConfigNotJsonFile,
     ConfigEmptyAlias,   
+
+    // Runtime E2xx
+    HttpRequestFailed,
+    HttpInvalidResponse,
 }
 
 impl ErrorCode {
@@ -135,6 +139,9 @@ impl ErrorCode {
             ErrorCode::ConfigMissingPath     => "E306",
             ErrorCode::ConfigNotJsonFile     => "E307",
             ErrorCode::ConfigEmptyAlias      => "E308",
+
+            ErrorCode::HttpRequestFailed   => "E212",
+            ErrorCode::HttpInvalidResponse => "E213",
         }
     }
 }

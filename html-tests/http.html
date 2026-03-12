@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head><title>HTTP Test</title></head>
+<body>
+
+    <!-- GET request to a public test API -->
+    <div class="http-get" id="get-response">
+        <div class="url"><span class="string">"https://jsonplaceholder.typicode.com/todos/1"</span></div>
+    </div>
+
+    <!-- Print some fields from the GET response -->
+    <var class="integer" id="todo-id">
+        <div class="map-get">
+            <var class="get-response"></var>
+            <div class="key"><span class="string">"id"</span></div>
+        </div>
+    </var>
+
+    <var class="string" id="todo-title">
+        <div class="map-get">
+            <var class="get-response"></var>
+            <div class="key"><span class="string">"title"</span></div>
+        </div>
+    </var>
+
+    <var class="boolean" id="todo-completed">
+        <div class="map-get">
+            <var class="get-response"></var>
+            <div class="key"><span class="string">"completed"</span></div>
+        </div>
+    </var>
+
+    <p><var class="todo-id"></var></p>
+    <p><var class="todo-title"></var></p>
+    <p><var class="todo-completed"></var></p>
+
+    <!-- POST request — send a map as the body -->
+    <div class="map" id="post-body">
+        <div class="title"><span class="string">"hello from HAPL"</span></div>
+        <div class="body"><span class="string">"this is a test post"</span></div>
+        <div class="userId"><span class="integer">1</span></div>
+    </div>
+
+    <div class="http-post" id="post-response">
+        <div class="url"><span class="string">"https://jsonplaceholder.typicode.com/posts"</span></div>
+        <div class="body">
+            <var class="post-body"></var>
+        </div>
+    </div>
+
+    <!-- Print the id assigned to the new post -->
+    <var class="integer" id="post-id">
+        <div class="map-get">
+            <var class="post-response"></var>
+            <div class="key"><span class="string">"id"</span></div>
+        </div>
+    </var>
+
+    <p><var class="post-id"></var></p>
+
+    <!-- Test error handling — bad URL -->
+    <div class="http-get" id="bad-response">
+        <div class="url"><span class="string">"https://jsonplaceholder.typicode.com/nonexistent"</span></div>
+    </div>
+
+    <var class="boolean" id="has-error">
+        <div class="map-contains">
+            <var class="bad-response"></var>
+            <div class="key"><span class="string">"error"</span></div>
+        </div>
+    </var>
+
+    <p><var class="has-error"></var></p>
+
+</body>
+</html>

@@ -189,6 +189,16 @@ pub enum Expr {
     Length {
         value: Box<Expr>,
     },
+
+    HttpGet {
+        name: String,
+        url: Box<Expr>,
+    },
+    HttpPost {
+        name: String,
+        url: Box<Expr>,
+        body: Box<Expr>,
+    },
 }
 
 /// Represents a single `if` or `elif` block
