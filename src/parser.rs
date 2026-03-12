@@ -969,6 +969,27 @@ impl HaplParser {
                 Ok(Expr::HttpPost { name: req_name, url: url_expr, body: body_expr })
             }
 
+
+            // -------------------------
+            // Input
+            // -------------------------
+            HaplTokenType::OpenInput => {
+                self.advance(); // consume OpenInput
+
+                if !matches!(self.current_token(), HaplTokenType::CloseInput) {
+                    return Err(parser_err(
+                        ErrorCode::TagNotClosed,
+                        "input block was never closed",
+                    )
+                    .with_hint("input takes no children: <div class=\"input\"></div>"));
+                }
+
+                self.advance(); // consume CloseInput
+
+                Ok(Expr::Input)
+            }
+
+
             other => Err(
                 parser_err(
                     ErrorCode::UnexpectedToken,
@@ -1042,6 +1063,7 @@ impl HaplParser {
             | HaplTokenType::OpenLength => self.parse_expression(),
             | HaplTokenType::OpenHttpGet { .. }
             | HaplTokenType::OpenHttpPost { .. } => self.parse_expression(),
+            | HaplTokenType::OpenInput => self.parse_expression(),
 
             // Structural HTML wrapper tokens are skipped
             HaplTokenType::OpenHtmlTag { .. } | HaplTokenType::CloseHtmlTag { .. } => {
@@ -2096,6 +2118,7 @@ impl HaplParser {
             Expr::MapContains { .. } => Some(StaticType::Boolean),
             Expr::Length { .. } => Some(StaticType::Integer),
             Expr::HttpGet { .. } | Expr::HttpPost { .. } => Some(StaticType::Map),
+            Expr::Input => Some(StaticType::String),
             _ => None,
         }
     }

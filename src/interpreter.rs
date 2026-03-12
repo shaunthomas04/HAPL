@@ -965,6 +965,23 @@ impl Interpreter {
                 ControlFlow::Value(result_map)
             }
 
+            // -------------------------
+            // Input
+            // -------------------------
+            Expr::Input => {
+                let mut input = String::new();
+                match std::io::stdin().read_line(&mut input) {
+                    Ok(_)  => ControlFlow::Value(LiteralValue::String(input.trim().to_string())),
+                    Err(e) => ControlFlow::Error(
+                        runtime_err(
+                            ErrorCode::BadOperatorTypes,
+                            format!("failed to read input: {}", e),
+                        )
+                        .with_hint("make sure stdin is available"),
+                    ),
+                }
+            }
+
         }
     }
 

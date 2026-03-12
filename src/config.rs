@@ -37,6 +37,8 @@ const VALID_KEYWORDS: &[&str] = &[
     "integer-list", "double-list", "string-list", "boolean-list",
     //http post and get
     "http-get", "http-post", "url",
+    //user input
+    "input",
 ];
 
 impl HaplConfig {
