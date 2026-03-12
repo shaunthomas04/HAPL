@@ -107,6 +107,15 @@ pub enum HaplTokenType {
 
     OpenLength,
     CloseLength,
+
+    OpenHttpGet { name: String },
+    CloseHttpGet { name: String },
+    OpenHttpPost { name: String },
+    CloseHttpPost { name: String },
+    OpenHttpUrl,
+    CloseHttpUrl,
+    OpenHttpBody,
+    CloseHttpBody,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -409,6 +418,30 @@ impl HaplToken {
     }
     pub fn close_length() -> Self {
         Self::new(HaplTokenType::CloseLength, Some("length".to_string()))
+    }
+    pub fn open_http_get(name: String) -> Self {
+        Self::new(HaplTokenType::OpenHttpGet { name: name.clone() }, Some(name))
+    }
+    pub fn close_http_get(name: String) -> Self {
+        Self::new(HaplTokenType::CloseHttpGet { name: name.clone() }, Some(name))
+    }
+    pub fn open_http_post(name: String) -> Self {
+        Self::new(HaplTokenType::OpenHttpPost { name: name.clone() }, Some(name))
+    }
+    pub fn close_http_post(name: String) -> Self {
+        Self::new(HaplTokenType::CloseHttpPost { name: name.clone() }, Some(name))
+    }
+    pub fn open_http_url() -> Self {
+        Self::new(HaplTokenType::OpenHttpUrl, Some("url".to_string()))
+    }
+    pub fn close_http_url() -> Self {
+        Self::new(HaplTokenType::CloseHttpUrl, Some("url".to_string()))
+    }
+    pub fn open_http_body() -> Self {
+        Self::new(HaplTokenType::OpenHttpBody, Some("body".to_string()))
+    }
+    pub fn close_http_body() -> Self {
+        Self::new(HaplTokenType::CloseHttpBody, Some("body".to_string()))
     }
 }
 
@@ -725,6 +758,13 @@ impl HaplLexer {
             return self.walk_length(tag);
         }
 
+        if class == "http-get"  { 
+            return self.walk_http_get(tag); 
+        }
+        if class == "http-post" { 
+            return self.walk_http_post(tag); 
+        }
+
         // ---- Function call ----
         if tag.id.is_none() {
             return self.walk_function_call(tag, class);
@@ -1027,7 +1067,72 @@ impl HaplLexer {
         Ok(())
     }
 
+    fn walk_http_get(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let name = tag.id.clone().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingId, "http-get is missing an id attribute")
+            .with_tag(tag_snippet(tag), "id is required to store the response as a map")
+            .with_hint("example: <div class=\"http-get\" id=\"response\">")
+        })?;
 
+        self.tokens.push(HaplToken::open_http_get(name.clone()));
+
+        for child in &tag.child_tags {
+            match child.class.as_deref() {
+                Some("url") => {
+                    self.tokens.push(HaplToken::open_http_url());
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                    self.tokens.push(HaplToken::close_http_url());
+                }
+                other => {
+                    return Err(
+                        lexer_err(ErrorCode::UnknownTag,
+                            format!("unexpected child '{}' inside http-get", other.unwrap_or("(none)")))
+                        .with_tag(tag_snippet(child), "only <div class=\"url\"> is valid here")
+                        .with_hint("example: <div class=\"url\"><span class=\"string\">\"https://...\"</span></div>")
+                    );
+                }
+            }
+        }
+
+        self.tokens.push(HaplToken::close_http_get(name));
+        Ok(())
+    }
+
+    fn walk_http_post(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let name = tag.id.clone().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingId, "http-post is missing an id attribute")
+            .with_tag(tag_snippet(tag), "id is required to store the response as a map")
+            .with_hint("example: <div class=\"http-post\" id=\"response\">")
+        })?;
+
+        self.tokens.push(HaplToken::open_http_post(name.clone()));
+
+        for child in &tag.child_tags {
+            match child.class.as_deref() {
+                Some("url") => {
+                    self.tokens.push(HaplToken::open_http_url());
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                    self.tokens.push(HaplToken::close_http_url());
+                }
+                Some("body") => {
+                    self.tokens.push(HaplToken::open_http_body());
+                    for grandchild in &child.child_tags { self.walk(grandchild)?; }
+                    self.tokens.push(HaplToken::close_http_body());
+                }
+                other => {
+                    return Err(
+                        lexer_err(ErrorCode::UnknownTag,
+                            format!("unexpected child '{}' inside http-post", other.unwrap_or("(none)")))
+                        .with_tag(tag_snippet(child), "only <div class=\"url\"> and <div class=\"body\"> are valid here")
+                        .with_hint("example: <div class=\"body\"><var class=\"myMap\"></var></div>")
+                    );
+                }
+            }
+        }
+
+        self.tokens.push(HaplToken::close_http_post(name));
+        Ok(())
+    }
 
 
 
@@ -1563,6 +1668,15 @@ impl HaplLexer {
                 HaplTokenType::OpenLength  => println!("OpenLength -> {:?}", token.value),
                 HaplTokenType::CloseLength => println!("CloseLength -> {:?}", token.value),
 
+
+                HaplTokenType::OpenHttpGet { name }  => println!("OpenHttpGet({}) -> {:?}", name, token.value),
+                HaplTokenType::CloseHttpGet { name } => println!("CloseHttpGet({}) -> {:?}", name, token.value),
+                HaplTokenType::OpenHttpPost { name } => println!("OpenHttpPost({}) -> {:?}", name, token.value),
+                HaplTokenType::CloseHttpPost { name } => println!("CloseHttpPost({}) -> {:?}", name, token.value),
+                HaplTokenType::OpenHttpUrl  => println!("OpenHttpUrl -> {:?}", token.value),
+                HaplTokenType::CloseHttpUrl => println!("CloseHttpUrl -> {:?}", token.value),
+                HaplTokenType::OpenHttpBody  => println!("OpenHttpBody -> {:?}", token.value),
+                HaplTokenType::CloseHttpBody => println!("CloseHttpBody -> {:?}", token.value),
             }
         }
     }

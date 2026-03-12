@@ -875,6 +875,100 @@ impl HaplParser {
                 Ok(Expr::Length { value: value_expr })
             }
 
+
+            // -------------------------
+            // HTTP Get
+            // -------------------------
+            HaplTokenType::OpenHttpGet { name } => {
+                let req_name = name.clone();
+                self.advance(); // consume OpenHttpGet
+
+                if !matches!(self.current_token(), HaplTokenType::OpenHttpUrl) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        "expected <div class=\"url\"> inside http-get",
+                    )
+                    .with_hint("example: <div class=\"url\"><span class=\"string\">\"https://...\"</span></div>"));
+                }
+                self.advance(); // consume OpenHttpUrl
+
+                let url_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseHttpUrl) {
+                    return Err(parser_err(ErrorCode::TagNotClosed, "http-get url block was never closed")
+                    .with_hint("add a matching closing tag for the <div class=\"url\"> block"));
+                }
+                self.advance(); // consume CloseHttpUrl
+
+                if !matches!(self.current_token(),
+                    HaplTokenType::CloseHttpGet { name: ref n } if n == &req_name)
+                {
+                    return Err(parser_err(ErrorCode::TagNotClosed,
+                        format!("http-get '{}' was never closed", req_name))
+                    .with_hint("add a matching closing tag for the http-get block"));
+                }
+                self.advance(); // consume CloseHttpGet
+
+                self.declare_var(req_name.clone(), StaticType::Map)?;
+
+                Ok(Expr::HttpGet { name: req_name, url: url_expr })
+            }
+
+            // -------------------------
+            // HTTP Post
+            // -------------------------
+            HaplTokenType::OpenHttpPost { name } => {
+                let req_name = name.clone();
+                self.advance(); // consume OpenHttpPost
+
+                if !matches!(self.current_token(), HaplTokenType::OpenHttpUrl) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        "expected <div class=\"url\"> inside http-post",
+                    )
+                    .with_hint("example: <div class=\"url\"><span class=\"string\">\"https://...\"</span></div>"));
+                }
+                self.advance(); // consume OpenHttpUrl
+
+                let url_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseHttpUrl) {
+                    return Err(parser_err(ErrorCode::TagNotClosed, "http-post url block was never closed")
+                    .with_hint("add a matching closing tag for the <div class=\"url\"> block"));
+                }
+                self.advance(); // consume CloseHttpUrl
+
+                if !matches!(self.current_token(), HaplTokenType::OpenHttpBody) {
+                    return Err(parser_err(
+                        ErrorCode::UnexpectedToken,
+                        "expected <div class=\"body\"> inside http-post",
+                    )
+                    .with_hint("example: <div class=\"body\"><var class=\"myMap\"></var></div>"));
+                }
+                self.advance(); // consume OpenHttpBody
+
+                let body_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseHttpBody) {
+                    return Err(parser_err(ErrorCode::TagNotClosed, "http-post body block was never closed")
+                    .with_hint("add a matching closing tag for the <div class=\"body\"> block"));
+                }
+                self.advance(); // consume CloseHttpBody
+
+                if !matches!(self.current_token(),
+                    HaplTokenType::CloseHttpPost { name: ref n } if n == &req_name)
+                {
+                    return Err(parser_err(ErrorCode::TagNotClosed,
+                        format!("http-post '{}' was never closed", req_name))
+                    .with_hint("add a matching closing tag for the http-post block"));
+                }
+                self.advance(); // consume CloseHttpPost
+
+                self.declare_var(req_name.clone(), StaticType::Map)?;
+
+                Ok(Expr::HttpPost { name: req_name, url: url_expr, body: body_expr })
+            }
+
             other => Err(
                 parser_err(
                     ErrorCode::UnexpectedToken,
@@ -946,6 +1040,8 @@ impl HaplParser {
             | HaplTokenType::OpenListPush { .. }
             | HaplTokenType::OpenListPop { .. } => self.parse_expression(),
             | HaplTokenType::OpenLength => self.parse_expression(),
+            | HaplTokenType::OpenHttpGet { .. }
+            | HaplTokenType::OpenHttpPost { .. } => self.parse_expression(),
 
             // Structural HTML wrapper tokens are skipped
             HaplTokenType::OpenHtmlTag { .. } | HaplTokenType::CloseHtmlTag { .. } => {
@@ -1999,7 +2095,7 @@ impl HaplParser {
             Expr::MapGet { .. } => Some(StaticType::Map),
             Expr::MapContains { .. } => Some(StaticType::Boolean),
             Expr::Length { .. } => Some(StaticType::Integer),
-
+            Expr::HttpGet { .. } | Expr::HttpPost { .. } => Some(StaticType::Map),
             _ => None,
         }
     }

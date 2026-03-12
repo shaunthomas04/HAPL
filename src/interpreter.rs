@@ -2,6 +2,7 @@ use crate::ast::{Expr, Operator, LiteralValue, StaticType};
 use crate::error::{ErrorCode, HaplError, runtime_err};
 use std::collections::HashMap;
 use indexmap::IndexMap;
+use serde_json;
 
 #[derive(Debug, Clone)]
 enum ControlFlow {
@@ -877,6 +878,93 @@ impl Interpreter {
                 }
             }
 
+            // -------------------------
+            // HTTP Get
+            // -------------------------
+            Expr::HttpGet { name, url } => {
+                let url_val = bubble!(self.eval_value(url));
+                let url_str = match url_val {
+                    LiteralValue::String(s) => s,
+                    other => return ControlFlow::Error(
+                        runtime_err(ErrorCode::HttpRequestFailed,
+                            format!("http-get url must be a string, got {:?}", other.type_name()))
+                        .with_hint("wrap the url in a string literal")
+                    ),
+                };
+
+                let result_map = match reqwest::blocking::get(&url_str) {
+                    Ok(response) => {
+                        match response.json::<serde_json::Value>() {
+                            Ok(json) => json_to_literal(json),
+                            Err(e) => {
+                                let mut entries = IndexMap::new();
+                                entries.insert("error".to_string(),
+                                    LiteralValue::String(format!("invalid JSON response: {}", e)));
+                                LiteralValue::Map { entries }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let mut entries = IndexMap::new();
+                        entries.insert("error".to_string(),
+                            LiteralValue::String(format!("request failed: {}", e)));
+                        LiteralValue::Map { entries }
+                    }
+                };
+
+                self.current_scope().insert(name.clone(), result_map.clone());
+                ControlFlow::Value(result_map)
+            }
+
+            // -------------------------
+            // HTTP Post
+            // -------------------------
+            Expr::HttpPost { name, url, body } => {
+                let url_val = bubble!(self.eval_value(url));
+                let url_str = match url_val {
+                    LiteralValue::String(s) => s,
+                    other => return ControlFlow::Error(
+                        runtime_err(ErrorCode::HttpRequestFailed,
+                            format!("http-post url must be a string, got {:?}", other.type_name()))
+                        .with_hint("wrap the url in a string literal")
+                    ),
+                };
+
+                let body_val = bubble!(self.eval_value(body));
+                let body_json = match literal_to_json(body_val) {
+                    Some(json) => json,
+                    None => return ControlFlow::Error(
+                        runtime_err(ErrorCode::HttpRequestFailed,
+                            "http-post body must be a map")
+                        .with_hint("pass a map variable as the body")
+                    ),
+                };
+
+                let client = reqwest::blocking::Client::new();
+                let result_map = match client.post(&url_str).json(&body_json).send() {
+                    Ok(response) => {
+                        match response.json::<serde_json::Value>() {
+                            Ok(json) => json_to_literal(json),
+                            Err(e) => {
+                                let mut entries = IndexMap::new();
+                                entries.insert("error".to_string(),
+                                    LiteralValue::String(format!("invalid JSON response: {}", e)));
+                                LiteralValue::Map { entries }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let mut entries = IndexMap::new();
+                        entries.insert("error".to_string(),
+                            LiteralValue::String(format!("request failed: {}", e)));
+                        LiteralValue::Map { entries }
+                    }
+                };
+
+                self.current_scope().insert(name.clone(), result_map.clone());
+                ControlFlow::Value(result_map)
+            }
+
         }
     }
 
@@ -1148,3 +1236,49 @@ macro_rules! bubble {
     };
 }
 use bubble;
+
+fn json_to_literal(val: serde_json::Value) -> LiteralValue {
+    match val {
+        serde_json::Value::String(s) => LiteralValue::String(s),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                LiteralValue::Integer(i)
+            } else {
+                LiteralValue::Double(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        serde_json::Value::Bool(b) => LiteralValue::Boolean(b),
+        serde_json::Value::Object(m) => {
+            let mut entries = IndexMap::new();
+            for (k, v) in m {
+                entries.insert(k, json_to_literal(v));
+            }
+            LiteralValue::Map { entries }
+        }
+        serde_json::Value::Array(arr) => {
+            let mut entries = IndexMap::new();
+            for (i, v) in arr.into_iter().enumerate() {
+                entries.insert(i.to_string(), json_to_literal(v));
+            }
+            LiteralValue::Map { entries }
+        }
+        serde_json::Value::Null => LiteralValue::String("null".to_string()),
+    }
+}
+
+fn literal_to_json(val: LiteralValue) -> Option<serde_json::Value> {
+    match val {
+        LiteralValue::String(s)  => Some(serde_json::Value::String(s)),
+        LiteralValue::Integer(n) => Some(serde_json::json!(n)),
+        LiteralValue::Double(f)  => Some(serde_json::json!(f)),
+        LiteralValue::Boolean(b) => Some(serde_json::Value::Bool(b)),
+        LiteralValue::Map { entries } => {
+            let mut map = serde_json::Map::new();
+            for (k, v) in entries {
+                map.insert(k, literal_to_json(v)?);
+            }
+            Some(serde_json::Value::Object(map))
+        }
+        LiteralValue::List { .. } => None,
+    }
+}

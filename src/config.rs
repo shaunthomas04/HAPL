@@ -35,6 +35,8 @@ const VALID_KEYWORDS: &[&str] = &[
     "boolean-param", "void-param", "map-param",
     // List type suffixes
     "integer-list", "double-list", "string-list", "boolean-list",
+    //http post and get
+    "http-get", "http-post", "url",
 ];
 
 impl HaplConfig {
