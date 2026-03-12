@@ -199,6 +199,8 @@ pub enum Expr {
         url: Box<Expr>,
         body: Box<Expr>,
     },
+
+    Input
 }
 
 /// Represents a single `if` or `elif` block

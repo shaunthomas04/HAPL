@@ -116,6 +116,9 @@ pub enum HaplTokenType {
     CloseHttpUrl,
     OpenHttpBody,
     CloseHttpBody,
+
+    OpenInput,
+    CloseInput,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -443,6 +446,14 @@ impl HaplToken {
     pub fn close_http_body() -> Self {
         Self::new(HaplTokenType::CloseHttpBody, Some("body".to_string()))
     }
+
+    pub fn open_input() -> Self {
+        Self::new(HaplTokenType::OpenInput, Some("input".to_string()))
+    }
+    pub fn close_input() -> Self {
+        Self::new(HaplTokenType::CloseInput, Some("input".to_string()))
+    }
+
 }
 
 // ------------------------------------------------------------------
@@ -763,6 +774,12 @@ impl HaplLexer {
         }
         if class == "http-post" { 
             return self.walk_http_post(tag); 
+        }
+
+        if class == "input" {
+            self.tokens.push(HaplToken::open_input());
+            self.tokens.push(HaplToken::close_input());
+            return Ok(());
         }
 
         // ---- Function call ----
@@ -1677,6 +1694,9 @@ impl HaplLexer {
                 HaplTokenType::CloseHttpUrl => println!("CloseHttpUrl -> {:?}", token.value),
                 HaplTokenType::OpenHttpBody  => println!("OpenHttpBody -> {:?}", token.value),
                 HaplTokenType::CloseHttpBody => println!("CloseHttpBody -> {:?}", token.value),
+
+                HaplTokenType::OpenInput  => println!("OpenInput -> {:?}", token.value),
+                HaplTokenType::CloseInput => println!("CloseInput -> {:?}", token.value),
             }
         }
     }
