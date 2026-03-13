@@ -1,5 +1,5 @@
 use crate::lexer::{HaplToken, HaplTokenType, LexerTagType, LoopType};
-use crate::ast::{Expr, Operator, StaticType, LiteralValue, ConditionalBlock};
+use crate::ast::{Expr, Operator, StaticType, LiteralValue, ConditionalBlock, HttpMethod, Endpoint};
 use crate::error::{ErrorCode, HaplError, parser_err};
 use std::collections::HashMap;
 
@@ -990,6 +990,25 @@ impl HaplParser {
             }
 
 
+
+
+            // -------------------------
+            // Open Respnod
+            // -------------------------
+            HaplTokenType::OpenRespond => {
+                self.advance(); // consume OpenRespond
+
+                let value_expr = Box::new(self.parse_expression()?);
+
+                if !matches!(self.current_token(), HaplTokenType::CloseRespond) {
+                    return Err(parser_err(ErrorCode::TagNotClosed, "respond block was never closed")
+                    .with_hint("add a matching closing tag for the <div class=\"respond\"> block"));
+                }
+                self.advance(); // consume CloseRespond
+
+                Ok(Expr::Respond { value: value_expr })
+            }
+
             other => Err(
                 parser_err(
                     ErrorCode::UnexpectedToken,
@@ -1076,7 +1095,8 @@ impl HaplParser {
             | HaplTokenType::OpenMapSet { .. }
             | HaplTokenType::OpenMapRemove { .. }
             | HaplTokenType::OpenMapContains => self.parse_expression(),
-
+            | HaplTokenType::OpenRespond => self.parse_expression(),
+            HaplTokenType::OpenServer { .. } => self.parse_server(),
 
             other => Err(
                 parser_err(
@@ -1971,6 +1991,85 @@ impl HaplParser {
             value: Some(Box::new(value)),
         })
     }
+
+
+    // --------------------------------------------------
+    // Parse server
+    // --------------------------------------------------
+    fn parse_server(&mut self) -> Result<Expr, HaplError> {
+        let port = match self.current_token() {
+            HaplTokenType::OpenServer { port } => port,
+            _ => unreachable!(),
+        };
+        self.advance(); // consume OpenServer
+
+        let mut endpoints = Vec::new();
+
+        while !self.is_at_end() && !matches!(self.current_token(), HaplTokenType::CloseServer) {
+            let (method, path) = match self.current_token() {
+                HaplTokenType::OpenEndpointGet { path }  => (HttpMethod::Get,  path.clone()),
+                HaplTokenType::OpenEndpointPost { path } => (HttpMethod::Post, path.clone()),
+                other => return Err(parser_err(
+                    ErrorCode::UnexpectedToken,
+                    format!("expected endpoint-get or endpoint-post, got '{:?}'", other),
+                )),
+            };
+            self.advance(); // consume OpenEndpointGet/Post
+
+            if !matches!(self.current_token(), HaplTokenType::OpenHandler) {
+                return Err(parser_err(
+                    ErrorCode::UnexpectedToken,
+                    "expected <div class=\"handler\"> inside endpoint",
+                )
+                .with_hint("each endpoint must have a handler block"));
+            }
+            self.advance(); // consume OpenHandler
+
+            self.push_scope();
+            // pre-declare auto-available variables
+            self.declare_var("params".to_string(), StaticType::Map)?;
+            self.declare_var("body".to_string(), StaticType::Map)?;
+
+            let mut handler = Vec::new();
+            while !self.is_at_end() && !matches!(self.current_token(), HaplTokenType::CloseHandler) {
+                handler.push(self.parse_statement()?);
+            }
+            self.pop_scope();
+
+            if self.is_at_end() {
+                return Err(parser_err(ErrorCode::TagNotClosed, "handler block was never closed"));
+            }
+            self.advance(); // consume CloseHandler
+
+            // consume CloseEndpointGet/Post
+            match method {
+                HttpMethod::Get => {
+                    if !matches!(self.current_token(), HaplTokenType::CloseEndpointGet) {
+                        return Err(parser_err(ErrorCode::TagNotClosed, "endpoint-get was never closed"));
+                    }
+                }
+                HttpMethod::Post => {
+                    if !matches!(self.current_token(), HaplTokenType::CloseEndpointPost) {
+                        return Err(parser_err(ErrorCode::TagNotClosed, "endpoint-post was never closed"));
+                    }
+                }
+            }
+            self.advance();
+
+            endpoints.push(Endpoint { method, path, handler });
+        }
+
+        if self.is_at_end() {
+            return Err(parser_err(ErrorCode::TagNotClosed, "server block was never closed")
+            .with_hint("add a matching closing tag for the <div class=\"server\"> block"));
+        }
+        self.advance(); // consume CloseServer
+
+        Ok(Expr::ServerDeclaration { port, endpoints })
+    }
+
+
+
 
     // --------------------------------------------------
     // Helpers

@@ -105,9 +105,11 @@ pub enum HaplTokenType {
     OpenMapEntry { key: String },
     CloseMapEntry { key: String },
 
+    //length functions
     OpenLength,
     CloseLength,
 
+    //requests
     OpenHttpGet { name: String },
     CloseHttpGet { name: String },
     OpenHttpPost { name: String },
@@ -117,8 +119,21 @@ pub enum HaplTokenType {
     OpenHttpBody,
     CloseHttpBody,
 
+    //user input
     OpenInput,
     CloseInput,
+
+    //server
+    OpenServer { port: u16 },
+    CloseServer,
+    OpenEndpointGet { path: String },
+    CloseEndpointGet,
+    OpenEndpointPost { path: String },
+    CloseEndpointPost,
+    OpenHandler,
+    CloseHandler,
+    OpenRespond,
+    CloseRespond
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -454,6 +469,36 @@ impl HaplToken {
         Self::new(HaplTokenType::CloseInput, Some("input".to_string()))
     }
 
+    pub fn open_server(port: u16) -> Self {
+        Self::new(HaplTokenType::OpenServer { port }, Some(port.to_string()))
+    }
+    pub fn close_server() -> Self {
+        Self::new(HaplTokenType::CloseServer, Some("server".to_string()))
+    }
+    pub fn open_endpoint_get(path: String) -> Self {
+        Self::new(HaplTokenType::OpenEndpointGet { path: path.clone() }, Some(path))
+    }
+    pub fn close_endpoint_get() -> Self {
+        Self::new(HaplTokenType::CloseEndpointGet, Some("endpoint-get".to_string()))
+    }
+    pub fn open_endpoint_post(path: String) -> Self {
+        Self::new(HaplTokenType::OpenEndpointPost { path: path.clone() }, Some(path))
+    }
+    pub fn close_endpoint_post() -> Self {
+        Self::new(HaplTokenType::CloseEndpointPost, Some("endpoint-post".to_string()))
+    }
+    pub fn open_handler() -> Self {
+        Self::new(HaplTokenType::OpenHandler, Some("handler".to_string()))
+    }
+    pub fn close_handler() -> Self {
+        Self::new(HaplTokenType::CloseHandler, Some("handler".to_string()))
+    }
+    pub fn open_respond() -> Self {
+        Self::new(HaplTokenType::OpenRespond, Some("respond".to_string()))
+    }
+    pub fn close_respond() -> Self {
+        Self::new(HaplTokenType::CloseRespond, Some("respond".to_string()))
+    }
 }
 
 // ------------------------------------------------------------------
@@ -649,15 +694,6 @@ impl HaplLexer {
 
         let class = self.resolve(&raw_class).to_string();
 
-        // let class = tag.class.as_ref().ok_or_else(|| {
-        //     lexer_err(
-        //         ErrorCode::MissingClass,
-        //         "missing class attribute on <div> tag",
-        //     )
-        //     .with_tag(tag_snippet(tag), "every <div> must have a class")
-        //     .with_hint("example: <div class=\"+\"> ... </div>")
-        // })?.clone();
-
         // ---- Arithmetic operators ----
         if let Some((open, close)) = self.try_arithmetic_tokens(&class) {
             self.tokens.push(open);
@@ -745,6 +781,10 @@ impl HaplLexer {
         if class == "map-set"      { return self.walk_map_set(tag); }
         if class == "map-remove"   { return self.walk_map_remove(tag); }
 
+        
+        // ---- Server Checks ----
+        if class == "server"  { return self.walk_server(tag); }
+        // if class == "respond" { return self.walk_respond(tag); }
 
         // ---- Function declaration ----
         if let Some(return_type) = self.parse_function_class(&class) {
@@ -781,6 +821,8 @@ impl HaplLexer {
             self.tokens.push(HaplToken::close_input());
             return Ok(());
         }
+
+        if class == "respond" { return self.walk_respond(tag); }
 
         // ---- Function call ----
         if tag.id.is_none() {
@@ -1503,6 +1545,107 @@ impl HaplLexer {
         Ok(())
     }
 
+
+    fn walk_server(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        let port_str = tag.id.clone().ok_or_else(|| {
+            lexer_err(ErrorCode::MissingId, "server is missing a port in the id attribute")
+            .with_tag(tag_snippet(tag), "id attribute must be the port number")
+            .with_hint("example: <div class=\"server\" id=\"8080\">")
+        })?;
+
+        let port = port_str.parse::<u16>().map_err(|_| {
+            lexer_err(ErrorCode::InvalidLiteral,
+                format!("server port '{}' is not a valid port number", port_str))
+            .with_tag(tag_snippet(tag), "port must be a number between 1 and 65535")
+            .with_hint("example: <div class=\"server\" id=\"8080\">")
+        })?;
+
+        self.tokens.push(HaplToken::new(
+            HaplTokenType::OpenServer { port },
+            Some(port_str.clone()),
+        ));
+
+        for child in &tag.child_tags {
+            match child.class.as_deref() {
+                Some("endpoint-get") => {
+                    let path = child.id.clone().ok_or_else(|| {
+                        lexer_err(ErrorCode::MissingId, "endpoint-get is missing a path in the id attribute")
+                        .with_tag(tag_snippet(child), "id attribute must be the endpoint path")
+                        .with_hint("example: <div class=\"endpoint-get\" id=\"/users\">")
+                    })?;
+                    self.tokens.push(HaplToken::new(
+                        HaplTokenType::OpenEndpointGet { path: path.clone() },
+                        Some(path.clone()),
+                    ));
+                    for grandchild in &child.child_tags {
+                        match grandchild.class.as_deref() {
+                            Some("handler") => {
+                                self.tokens.push(HaplToken::open_handler());
+                                for gc in &grandchild.child_tags { self.walk(gc)?; }
+                                self.tokens.push(HaplToken::close_handler());
+                            }
+                            other => return Err(
+                                lexer_err(ErrorCode::UnknownTag,
+                                    format!("unexpected child '{}' inside endpoint-get", other.unwrap_or("(none)")))
+                                .with_tag(tag_snippet(grandchild), "only <div class=\"handler\"> is valid here")
+                            ),
+                        }
+                    }
+                    self.tokens.push(HaplToken::new(
+                        HaplTokenType::CloseEndpointGet,
+                        Some(path),
+                    ));
+                }
+                Some("endpoint-post") => {
+                    let path = child.id.clone().ok_or_else(|| {
+                        lexer_err(ErrorCode::MissingId, "endpoint-post is missing a path in the id attribute")
+                        .with_tag(tag_snippet(child), "id attribute must be the endpoint path")
+                        .with_hint("example: <div class=\"endpoint-post\" id=\"/users\">")
+                    })?;
+                    self.tokens.push(HaplToken::new(
+                        HaplTokenType::OpenEndpointPost { path: path.clone() },
+                        Some(path.clone()),
+                    ));
+                    for grandchild in &child.child_tags {
+                        match grandchild.class.as_deref() {
+                            Some("handler") => {
+                                self.tokens.push(HaplToken::open_handler());
+                                for gc in &grandchild.child_tags { self.walk(gc)?; }
+                                self.tokens.push(HaplToken::close_handler());
+                            }
+                            other => return Err(
+                                lexer_err(ErrorCode::UnknownTag,
+                                    format!("unexpected child '{}' inside endpoint-post", other.unwrap_or("(none)")))
+                                .with_tag(tag_snippet(grandchild), "only <div class=\"handler\"> is valid here")
+                            ),
+                        }
+                    }
+                    self.tokens.push(HaplToken::new(
+                        HaplTokenType::CloseEndpointPost,
+                        Some(path),
+                    ));
+                }
+                other => return Err(
+                    lexer_err(ErrorCode::UnknownTag,
+                        format!("unexpected child '{}' inside server", other.unwrap_or("(none)")))
+                    .with_tag(tag_snippet(child), "only endpoint-get and endpoint-post are valid here")
+                    .with_hint("example: <div class=\"endpoint-get\" id=\"/users\">")
+                ),
+            }
+        }
+
+        self.tokens.push(HaplToken::new(HaplTokenType::CloseServer, Some(port_str)));
+        Ok(())
+    }
+
+    fn walk_respond(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+        self.tokens.push(HaplToken::open_respond());
+        for child in &tag.child_tags { self.walk(child)?; }
+        self.tokens.push(HaplToken::close_respond());
+        Ok(())
+    }
+
+
     // mirrors extract_list_name — grabs the map variable name from the first <var> child
     fn extract_map_name(&self, tag: &HtmlTag, op: &str) -> Result<String, HaplError> {
         let first = tag.child_tags.first().ok_or_else(|| {
@@ -1697,6 +1840,17 @@ impl HaplLexer {
 
                 HaplTokenType::OpenInput  => println!("OpenInput -> {:?}", token.value),
                 HaplTokenType::CloseInput => println!("CloseInput -> {:?}", token.value),
+
+                HaplTokenType::OpenServer { port } => println!("OpenServer({}) -> {:?}", port, token.value),
+                HaplTokenType::CloseServer => println!("CloseServer -> {:?}", token.value),
+                HaplTokenType::OpenEndpointGet { path } => println!("OpenEndpointGet({}) -> {:?}", path, token.value),
+                HaplTokenType::CloseEndpointGet => println!("CloseEndpointGet -> {:?}", token.value),
+                HaplTokenType::OpenEndpointPost { path } => println!("OpenEndpointPost({}) -> {:?}", path, token.value),
+                HaplTokenType::CloseEndpointPost => println!("CloseEndpointPost -> {:?}", token.value),
+                HaplTokenType::OpenHandler => println!("OpenHandler -> {:?}", token.value),
+                HaplTokenType::CloseHandler => println!("CloseHandler -> {:?}", token.value),
+                HaplTokenType::OpenRespond => println!("OpenRespond -> {:?}", token.value),
+                HaplTokenType::CloseRespond => println!("CloseRespond -> {:?}", token.value),
             }
         }
     }
