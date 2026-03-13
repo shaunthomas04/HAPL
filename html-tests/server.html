@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head><title>HAPL Multi-Route Server</title></head>
+<body>
+
+    <div class="server" id="8080">
+
+        <!-- GET /hello?name=alice -->
+        <div class="endpoint-get" id="/hello">
+            <div class="handler">
+                <var class="string" id="name">
+                    <div class="map-get">
+                        <var class="params"></var>
+                        <div class="key"><span class="string">"name"</span></div>
+                    </div>
+                </var>
+                <div class="respond">
+                    <div class="+">
+                        <span class="string">"Hello, "</span>
+                        <var class="name"></var>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GET /add?a=5&b=3 -->
+        <div class="endpoint-get" id="/add">
+            <div class="handler">
+                <var class="string" id="a-str">
+                    <div class="map-get">
+                        <var class="params"></var>
+                        <div class="key"><span class="string">"a"</span></div>
+                    </div>
+                </var>
+                <var class="string" id="b-str">
+                    <div class="map-get">
+                        <var class="params"></var>
+                        <div class="key"><span class="string">"b"</span></div>
+                    </div>
+                </var>
+                <div class="respond">
+                    <div class="+">
+                        <div class="+">
+                            <span class="string">"a = "</span>
+                            <var class="a-str"></var>
+                        </div>
+                        <div class="+">
+                            <span class="string">" b = "</span>
+                            <var class="b-str"></var>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GET /greet?first=John&last=Doe -->
+        <div class="endpoint-get" id="/greet">
+            <div class="handler">
+                <var class="string" id="first">
+                    <div class="map-get">
+                        <var class="params"></var>
+                        <div class="key"><span class="string">"first"</span></div>
+                    </div>
+                </var>
+                <var class="string" id="last">
+                    <div class="map-get">
+                        <var class="params"></var>
+                        <div class="key"><span class="string">"last"</span></div>
+                    </div>
+                </var>
+                <div class="respond">
+                    <div class="+">
+                        <div class="+">
+                            <span class="string">"Welcome, "</span>
+                            <var class="first"></var>
+                        </div>
+                        <div class="+">
+                            <span class="string">" "</span>
+                            <var class="last"></var>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GET /ping -->
+        <div class="endpoint-get" id="/ping">
+            <div class="handler">
+                <div class="respond">
+                    <span class="string">"pong"</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- POST /echo — echoes body back as JSON -->
+        <div class="endpoint-post" id="/echo">
+            <div class="handler">
+                <div class="respond">
+                    <var class="body"></var>
+                </div>
+            </div>
+        </div>
+
+        <!-- POST /user — creates a user from body -->
+        <div class="endpoint-post" id="/user">
+            <div class="handler">
+                <var class="string" id="username">
+                    <div class="map-get">
+                        <var class="body"></var>
+                        <div class="key"><span class="string">"name"</span></div>
+                    </div>
+                </var>
+                <var class="string" id="email">
+                    <div class="map-get">
+                        <var class="body"></var>
+                        <div class="key"><span class="string">"email"</span></div>
+                    </div>
+                </var>
+                <div class="respond">
+                    <div class="+">
+                        <div class="+">
+                            <span class="string">"Created user "</span>
+                            <var class="username"></var>
+                        </div>
+                        <div class="+">
+                            <span class="string">" with email "</span>
+                            <var class="email"></var>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

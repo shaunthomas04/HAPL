@@ -12,7 +12,7 @@ mod config;
 use std::env;
 
 use crate::config::HaplConfig;
-use crate::error::{lexer_err, parser_err, ErrorCode, config_err};
+use crate::error::{lexer_err, ErrorCode, config_err};
 use crate::lexer::{HaplLexer, HaplTokenType};
 use crate::parser::HaplParser;
 use crate::interpreter::Interpreter;
@@ -135,13 +135,17 @@ fn main() {
 
     // ── Parse ────────────────────────────────────────────────────────
     let mut parser = HaplParser::new(tokens);
-    let ast_nodes = parser.parse_program().unwrap_or_else(|_e| {
-        parser_err(
-            ErrorCode::UnexpectedToken,
-            "parser failed to produce an AST",
-        )
-        .report_and_exit(html_file_path);
+    // let ast_nodes = parser.parse_program().unwrap_or_else(|_e| {
+    //     parser_err(
+    //         ErrorCode::UnexpectedToken,
+    //         "parser failed to produce an AST",
+    //     )
+    //     .report_and_exit(html_file_path);
+    // });
+    let ast_nodes = parser.parse_program().unwrap_or_else(|e| {
+        e.report_and_exit(html_file_path);
     });
+
 
     if ast_nodes.is_empty() {
         eprintln!(

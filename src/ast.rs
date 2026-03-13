@@ -200,7 +200,16 @@ pub enum Expr {
         body: Box<Expr>,
     },
 
-    Input
+    Input,
+
+    ServerDeclaration {
+        port: u16,
+        endpoints: Vec<Endpoint>,
+    },
+
+    Respond {
+        value: Box<Expr>,
+    },
 }
 
 /// Represents a single `if` or `elif` block
@@ -290,4 +299,17 @@ pub enum Value {
     String(String),
     Boolean(bool),
     Void,
+}
+
+#[derive(Debug, Clone)]
+pub struct Endpoint {
+    pub method: HttpMethod,
+    pub path: String,
+    pub handler: Vec<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub enum HttpMethod {
+    Get,
+    Post,
 }
