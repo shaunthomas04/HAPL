@@ -1,4 +1,8 @@
-# HAPL — HTML As A Programming Language
+<p align="center">
+  <img src="images/logo.png" alt="HAPL Logo" width="800">
+</p>
+
+# HAPL - HTML As A Programming Language
 
 HAPL is a programming language written in valid HTML. Every program is a real `.html` file. Tags are statements, classes are keywords, and ids are names. A HAPL program is also a webpage — your browser can open it, and HAPL can run it.
 
