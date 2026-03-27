@@ -1,622 +1,1112 @@
-# HAPL
+# HAPL — HTML As A Programming Language
 
-<!-- INSERT BANNER IMAGE HERE -->
-<!-- e.g. ![HAPL Banner](./assets/banner.png) -->
+HAPL is a programming language written in valid HTML. Every program is a real `.html` file. Tags are statements, classes are keywords, and ids are names. A HAPL program is also a webpage — your browser can open it, and HAPL can run it.
 
-> **H**TML **A**s a **P**rogramming **L**anguage — write programs in plain HTML.
-
-HAPL is a programming language implemented in Rust where the source code *is* a valid HTML file. Instead of a custom syntax, HAPL uses standard HTML tags, classes, and IDs to express variables, arithmetic, conditionals, loops, functions, and maps. Open it in a browser and it looks like a webpage. Run it through the HAPL interpreter and it executes as a program.
-
----
-
-## Table of Contents
-
-- [How It Works](#how-it-works)
-- [Running a Program](#running-a-program)
-- [Literals and Types](#literals-and-types)
-- [Variables](#variables)
-- [Printing](#printing)
-- [Arithmetic](#arithmetic)
-- [Comparison and Logic](#comparison-and-logic)
-- [Conditionals](#conditionals)
-- [While Loops](#while-loops)
-- [For Loops](#for-loops)
-- [Functions](#functions)
-- [Maps](#maps)
-
----
-
-<a name="how-it-works"></a>
-## How It Works
-
-HAPL programs are `.html` files. The interpreter parses the HTML into a tag tree, then walks that tree through three stages:
-
-```
-HTML file → Tag Extraction → Lexer → Token stream → Parser → AST → Interpreter → Output
+```html
+<html>
+<body>
+  <p><span class="string">"Hello, world!"</span></p>
+</body>
+</html>
 ```
 
-Standard HTML boilerplate (`<html>`, `<head>`, `<body>`, `<meta>` etc.) is ignored transparently, so your HAPL code can live inside a real, valid HTML file.
+```
+$ HAPL hello.html
+Hello, world!
+```
 
 ---
 
-<a name="running-a-program"></a>
-## Running a Program
+## Table of contents
+
+- [Installation](#installation)
+- [Running a program](#running-a-program)
+- [Language reference](#language-reference)
+  - [Types](#types)
+  - [Variables](#variables)
+  - [Printing](#printing)
+  - [Operators](#operators)
+  - [Conditionals](#conditionals)
+  - [While loops](#while-loops)
+  - [For loops](#for-loops)
+  - [Functions](#functions)
+  - [Lists](#lists)
+  - [Maps](#maps)
+  - [User input](#user-input)
+  - [HTTP requests](#http-requests)
+  - [HTTP server](#http-server)
+- [Keyword remapping](#keyword-remapping)
+- [Complete examples](#complete-examples)
+- [Error messages](#error-messages)
+
+---
+
+## Installation
+
+HAPL requires [Rust](https://rustup.rs) (stable, 1.70+).
 
 ```bash
-cargo run -- path/to/your/program.html
+git clone https://github.com/your-username/hapl
+cd hapl
+cargo build --release
+```
+
+The compiled binary lives at `target/release/HAPL`. You can copy it anywhere on your `PATH`.
+
+---
+
+## Running a program
+
+```bash
+cargo run -- path/to/program.html
+```
+
+Or with the release build:
+
+```bash
+./target/release/HAPL path/to/program.html
 ```
 
 ---
 
-<a name="literals-and-types"></a>
-## Literals and Types
+## Language reference
 
-HAPL has four primitive types. Literals are written inside `<span>` tags with a class indicating the type.
+### Types
 
-| Type | Class | Example |
-|------|-------|---------|
-| Integer | `integer` | `<span class="integer">42</span>` |
-| Double | `double` | `<span class="double">3.14</span>` |
-| String | `string` | `<span class="string">"hello"</span>` |
-| Boolean | `boolean` | `<span class="boolean">true</span>` |
+HAPL has six types. Every variable must be declared with one.
 
-> String literals must be wrapped in double quotes inside the tag content.
+| Type      | HTML class  | Example value      |
+|-----------|-------------|--------------------|
+| `integer` | `integer`   | `42`, `-7`         |
+| `double`  | `double`    | `3.14`, `-0.5`     |
+| `string`  | `string`    | `"hello"`          |
+| `boolean` | `boolean`   | `true`, `false`    |
+| `map`     | `map`       | `{ "key": value }` |
+| list      | `TYPE-list` | `[1, 2, 3]`        |
+
+Strings must always be wrapped in double quotes inside the span content.
 
 ---
 
-<a name="variables"></a>
-## Variables
+### Variables
 
-### Declaration
-
-Declare a variable with a `<var>` tag. The `class` is the type, the `id` is the variable name, and the content is the initial value.
+#### Declaration
 
 ```html
-<!-- integer x = 10 -->
-<var class="integer" id="x">
-    <span class="integer">10</span>
+<var class="TYPE" id="NAME">
+  VALUE
+</var>
+```
+
+`TYPE` is one of `integer`, `double`, `string`, `boolean`, or `map`. `NAME` is the variable name. `VALUE` is any expression — a literal, another variable, an operation, or a function call.
+
+```html
+<!-- integer -->
+<var class="integer" id="age">
+  <span class="integer">25</span>
 </var>
 
-<!-- string name = "Shaun" -->
-<var class="string" id="name">
-    <span class="string">"Shaun"</span>
-</var>
-
-<!-- boolean flag = true -->
-<var class="boolean" id="flag">
-    <span class="boolean">true</span>
-</var>
-
-<!-- double pi = 3.14 -->
+<!-- double -->
 <var class="double" id="pi">
-    <span class="double">3.14</span>
+  <span class="double">3.14159</span>
+</var>
+
+<!-- string -->
+<var class="string" id="name">
+  <span class="string">"Alice"</span>
+</var>
+
+<!-- boolean -->
+<var class="boolean" id="active">
+  <span class="boolean">true</span>
 </var>
 ```
 
-### Reference
+#### Reference
 
-Reference an existing variable with a `<var>` tag that has only a `class` (the variable name) and no `id` or children.
+To read a variable, use a `<var>` with no `id` and no children:
 
 ```html
-<!-- reference variable x -->
-<var class="x"></var>
+<!-- Print the value of 'age' -->
+<p><var class="age"></var></p>
 ```
 
-### Assignment
+#### Assignment
 
-Reassign a variable with a `<var>` tag that has a `class` (the variable name) and children (the new value), but no `id`.
+To overwrite a variable, use a `<var>` with no `id` but with a child value:
 
 ```html
-<!-- x = 99 -->
-<var class="x">
-    <span class="integer">99</span>
+<var class="age">
+  <span class="integer">30</span>
 </var>
 ```
 
 ---
 
-<a name="printing"></a>
-## Printing
+### Printing
 
-Wrap any expression in a `<p>` tag to print it.
-
-```html
-<!-- print a literal -->
-<p>
-    <span class="string">"Hello, World!"</span>
-</p>
-
-<!-- print a variable -->
-<p>
-    <var class="name"></var>
-</p>
-```
-
----
-
-<a name="arithmetic"></a>
-## Arithmetic
-
-Arithmetic operations are written as `<div>` tags with a class of `+`, `-`, `*`, or `/`. Operands are nested inside and can be literals, variable references, or other operations.
+Use the `<p>` tag. The single child is the value to print.
 
 ```html
-<!-- 3 + 4 -->
-<div class="+">
-    <span class="integer">3</span>
-    <span class="integer">4</span>
-</div>
+<!-- Print a string literal -->
+<p><span class="string">"Hello, world!"</span></p>
 
-<!-- (2 + 3) * 4 -->
-<div class="*">
-    <div class="+">
-        <span class="integer">2</span>
-        <span class="integer">3</span>
-    </div>
-    <span class="integer">4</span>
-</div>
+<!-- Print a variable -->
+<p><var class="name"></var></p>
 
-<!-- print x + 10 -->
+<!-- Print the result of an expression -->
 <p>
-    <div class="+">
-        <var class="x"></var>
-        <span class="integer">10</span>
-    </div>
-</p>
-```
-
----
-
-<a name="comparison-and-logic"></a>
-## Comparison and Logic
-
-### Comparison Operators
-
-| Operator | Class |
-|----------|-------|
-| `==` | `equal` |
-| `!=` | `not_equal` |
-| `<` | `less` |
-| `<=` | `less_equal` |
-| `>` | `greater` |
-| `>=` | `greater_equal` |
-
-```html
-<!-- x == 10 -->
-<div class="equal">
-    <var class="x"></var>
+  <div class="+">
     <span class="integer">10</span>
+    <span class="integer">5</span>
+  </div>
+</p>
+```
+
+---
+
+### Operators
+
+All operators are `<div>` tags. The operands are the children.
+
+#### Arithmetic
+
+| Operation      | Class | Min operands |
+|----------------|-------|--------------|
+| Addition       | `+`   | 2+           |
+| Subtraction    | `-`   | 2+           |
+| Multiplication | `*`   | 2+           |
+| Division       | `/`   | 2+           |
+| Modulo         | `%`   | 2+           |
+
+```html
+<!-- 10 + 5 = 15 -->
+<div class="+">
+  <span class="integer">10</span>
+  <span class="integer">5</span>
 </div>
 
-<!-- x > 5 -->
-<div class="greater">
-    <var class="x"></var>
-    <span class="integer">5</span>
+<!-- Operators nest freely: (2 * 3) + 1 = 7 -->
+<div class="+">
+  <div class="*">
+    <span class="integer">2</span>
+    <span class="integer">3</span>
+  </div>
+  <span class="integer">1</span>
+</div>
+
+<!-- String concatenation with + -->
+<div class="+">
+  <span class="string">"Hello, "</span>
+  <var class="name"></var>
 </div>
 ```
 
-### Logical Operators
+#### Comparison
 
-| Operator | Class |
-|----------|-------|
-| `&&` | `&&` |
-| `\|\|` | `\|\|` |
-| `!` | `!` |
+All comparison operators require exactly 2 operands and return a `boolean`.
+
+| Operation             | Class           |
+|-----------------------|-----------------|
+| Equal                 | `equal`         |
+| Not equal             | `not_equal`     |
+| Less than             | `less`          |
+| Less than or equal    | `less_equal`    |
+| Greater than          | `greater`       |
+| Greater than or equal | `greater_equal` |
+
+```html
+<!-- age >= 18 -->
+<div class="greater_equal">
+  <var class="age"></var>
+  <span class="integer">18</span>
+</div>
+```
+
+#### Boolean
+
+| Operation | Class | Notes                       |
+|-----------|-------|-----------------------------|
+| And       | `&&`  | 2+ operands, short-circuits |
+| Or        | `\|\|`  | 2+ operands, short-circuits |
+| Not       | `!`   | exactly 1 operand           |
+
+`&&` and `||` short-circuit — if the result is determined by the first operand, the rest are never evaluated.
 
 ```html
 <!-- x > 0 && x < 100 -->
 <div class="&&">
-    <div class="greater">
-        <var class="x"></var>
-        <span class="integer">0</span>
-    </div>
-    <div class="less">
-        <var class="x"></var>
-        <span class="integer">100</span>
-    </div>
+  <div class="greater">
+    <var class="x"></var>
+    <span class="integer">0</span>
+  </div>
+  <div class="less">
+    <var class="x"></var>
+    <span class="integer">100</span>
+  </div>
 </div>
 
-<!-- !flag -->
+<!-- !active -->
 <div class="!">
-    <var class="flag"></var>
+  <var class="active"></var>
 </div>
 ```
 
 ---
 
-<a name="conditionals"></a>
-## Conditionals
-
-Conditionals use a `<div class="conditional">` wrapper containing `<div class="if">`, optional `<div class="elif">`, and optional `<div class="else">` blocks.
-
-The **first expression** inside an `if` or `elif` block is the condition. Everything after it is the body.
+### Conditionals
 
 ```html
 <div class="conditional">
-
-    <div class="if">
-        <!-- condition: x > 10 -->
-        <div class="greater">
-            <var class="x"></var>
-            <span class="integer">10</span>
-        </div>
-
-        <!-- body -->
-        <p>
-            <span class="string">"x is greater than 10"</span>
-        </p>
-    </div>
-
-    <div class="elif">
-        <!-- condition: x == 10 -->
-        <div class="equal">
-            <var class="x"></var>
-            <span class="integer">10</span>
-        </div>
-
-        <!-- body -->
-        <p>
-            <span class="string">"x is exactly 10"</span>
-        </p>
-    </div>
-
-    <div class="else">
-        <p>
-            <span class="string">"x is less than 10"</span>
-        </p>
-    </div>
-
+  <div class="if">
+    CONDITION
+    STATEMENTS...
+  </div>
+  <div class="elif">
+    CONDITION
+    STATEMENTS...
+  </div>
+  <div class="else">
+    STATEMENTS...
+  </div>
 </div>
 ```
 
----
-
-<a name="while-loops"></a>
-## While Loops
-
-A while loop uses `<div class="while">` with a `<div class="condition">` and a `<div class="body">`.
+`elif` and `else` are optional. You can have as many `elif` blocks as you need.
 
 ```html
-<!-- while x > 0: print x, then x = x - 1 -->
-<div class="while">
-
-    <div class="condition">
-        <div class="greater">
-            <var class="x"></var>
-            <span class="integer">0</span>
-        </div>
-    </div>
-
-    <div class="body">
-        <p>
-            <var class="x"></var>
-        </p>
-
-        <!-- x = x - 1 -->
-        <var class="x">
-            <div class="-">
-                <var class="x"></var>
-                <span class="integer">1</span>
-            </div>
-        </var>
-    </div>
-
-</div>
-```
-
----
-
-<a name="for-loops"></a>
-## For Loops
-
-A for loop uses `<div class="for">` with four sections: `iterator`, `condition`, `increment`, and `body`. The iterator must be an integer variable.
-
-```html
-<!-- for i = 0; i < 5; i + 1 -->
-<div class="for">
-
-    <div class="iterator">
-        <var class="i"></var>
-    </div>
-
-    <div class="condition">
-        <div class="less">
-            <var class="i"></var>
-            <span class="integer">5</span>
-        </div>
-    </div>
-
-    <div class="increment">
-        <span class="integer">1</span>
-    </div>
-
-    <div class="body">
-        <p>
-            <var class="i"></var>
-        </p>
-    </div>
-
-</div>
-```
-
----
-
-<a name="functions"></a>
-## Functions
-
-### Declaration
-
-Declare a function with `<div class="{returnType}-function" id="{functionName}">`. It contains a `<div class="params">` and a `<div class="body">`.
-
-Return types: `integer`, `double`, `string`, `boolean`, `void`, `map`
-
-```html
-<div class="void-function" id="greet">
-
-    <div class="params">
-        <div class="string-param" id="name"></div>
-        <div class="integer-param" id="age"></div>
-    </div>
-
-    <div class="body">
-        <p>
-            <var class="name"></var>
-        </p>
-        <p>
-            <var class="age"></var>
-        </p>
-    </div>
-
-</div>
-```
-
-### Return Values
-
-Use `<div class="return">` inside the function body to return a value.
-
-```html
-<div class="integer-function" id="double">
-
-    <div class="params">
-        <div class="integer-param" id="n"></div>
-    </div>
-
-    <div class="body">
-        <div class="return">
-            <div class="*">
-                <span class="integer">2</span>
-                <var class="n"></var>
-            </div>
-        </div>
-    </div>
-
-</div>
-```
-
-### Calling a Function
-
-Call a function with `<div class="{functionName}">`. Pass arguments inside a `<div class="args">`.
-
-```html
-<!-- greet("Shaun", 25) -->
-<div class="greet">
-    <div class="args">
-        <span class="string">"Shaun"</span>
-        <span class="integer">25</span>
-    </div>
-</div>
-```
-
-### Storing a Return Value
-
-```html
-<var class="integer" id="result">
-    <div class="circumference">
-        <div class="args">
-            <span class="integer">7</span>
-        </div>
-    </div>
+<var class="integer" id="score">
+  <span class="integer">85</span>
 </var>
 
+<div class="conditional">
+  <div class="if">
+    <div class="greater_equal">
+      <var class="score"></var>
+      <span class="integer">90</span>
+    </div>
+    <p><span class="string">"Grade: A"</span></p>
+  </div>
+  <div class="elif">
+    <div class="greater_equal">
+      <var class="score"></var>
+      <span class="integer">80</span>
+    </div>
+    <p><span class="string">"Grade: B"</span></p>
+  </div>
+  <div class="else">
+    <p><span class="string">"Grade: C or lower"</span></p>
+  </div>
+</div>
+```
+
+---
+
+### While loops
+
+```html
+<div class="while">
+  <div class="condition">
+    BOOLEAN_EXPRESSION
+  </div>
+  <div class="body">
+    STATEMENTS...
+  </div>
+</div>
+```
+
+```html
+<var class="integer" id="count">
+  <span class="integer">0</span>
+</var>
+
+<div class="while">
+  <div class="condition">
+    <div class="less">
+      <var class="count"></var>
+      <span class="integer">5</span>
+    </div>
+  </div>
+  <div class="body">
+    <p><var class="count"></var></p>
+    <var class="count">
+      <div class="+">
+        <var class="count"></var>
+        <span class="integer">1</span>
+      </div>
+    </var>
+  </div>
+</div>
+```
+
+---
+
+### For loops
+
+```html
+<div class="for">
+  <div class="iterator">
+    VARIABLE_REFERENCE
+  </div>
+  <div class="condition">
+    BOOLEAN_EXPRESSION
+  </div>
+  <div class="increment">
+    INTEGER_EXPRESSION
+  </div>
+  <div class="body">
+    STATEMENTS...
+  </div>
+</div>
+```
+
+The iterator variable is automatically declared as `integer` and starts at `0`. The increment expression's value is added to it at the end of each iteration.
+
+```html
+<!-- Print 0, 1, 2, 3, 4 -->
+<div class="for">
+  <div class="iterator"><var class="i"></var></div>
+  <div class="condition">
+    <div class="less">
+      <var class="i"></var>
+      <span class="integer">5</span>
+    </div>
+  </div>
+  <div class="increment"><span class="integer">1</span></div>
+  <div class="body">
+    <p><var class="i"></var></p>
+  </div>
+</div>
+```
+
+Any integer expression works as the increment, so you can step by any amount:
+
+```html
+<!-- Count by 2: 0, 2, 4, 6, 8 -->
+<div class="increment">
+  <span class="integer">2</span>
+</div>
+```
+
+---
+
+### Functions
+
+#### Declaration
+
+```html
+<div class="RETURNTYPE-function" id="NAME">
+  <div class="params">
+    <div class="PARAMTYPE-param" id="PARAMNAME"></div>
+    ...
+  </div>
+  <div class="body">
+    STATEMENTS...
+    <div class="return">RETURN_VALUE</div>
+  </div>
+</div>
+```
+
+Valid return types: `integer`, `double`, `string`, `boolean`, `map`, `void`.
+Valid parameter types: `integer`, `double`, `string`, `boolean`, `map`.
+
+```html
+<!-- integer add(integer a, integer b) -->
+<div class="integer-function" id="add">
+  <div class="params">
+    <div class="integer-param" id="a"></div>
+    <div class="integer-param" id="b"></div>
+  </div>
+  <div class="body">
+    <div class="return">
+      <div class="+">
+        <var class="a"></var>
+        <var class="b"></var>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- void greet(string name) -->
+<div class="void-function" id="greet">
+  <div class="params">
+    <div class="string-param" id="name"></div>
+  </div>
+  <div class="body">
+    <p>
+      <div class="+">
+        <span class="string">"Hello, "</span>
+        <var class="name"></var>
+      </div>
+    </p>
+  </div>
+</div>
+```
+
+#### Calling a function
+
+```html
+<div class="FUNCTIONNAME">
+  <div class="args">
+    ARG1
+    ARG2
+    ...
+  </div>
+</div>
+```
+
+```html
+<!-- result = add(3, 4) -->
+<var class="integer" id="result">
+  <div class="add">
+    <div class="args">
+      <span class="integer">3</span>
+      <span class="integer">4</span>
+    </div>
+  </div>
+</var>
+
+<p><var class="result"></var></p>
+
+<!-- greet("Bob") — void, used as a statement -->
+<div class="greet">
+  <div class="args">
+    <span class="string">"Bob"</span>
+  </div>
+</div>
+```
+
+Functions can be called before they are declared — HAPL pre-scans all function signatures before executing.
+
+---
+
+### Lists
+
+#### Declaration
+
+```html
+<div class="TYPE-list" id="NAME">
+  <span class="TYPE">VALUE</span>
+  ...
+</div>
+```
+
+Valid element types: `integer`, `double`, `string`, `boolean`.
+
+```html
+<div class="integer-list" id="scores">
+  <span class="integer">10</span>
+  <span class="integer">20</span>
+  <span class="integer">30</span>
+</div>
+```
+
+All elements must match the declared type. Pushing or assigning a value of the wrong type is a runtime error.
+
+#### Access by index
+
+```html
+<!-- scores[1] — evaluates to 20 -->
 <p>
-    <var class="result"></var>
+  <div class="index">
+    <var class="scores"></var>
+    <span class="integer">1</span>
+  </div>
+</p>
+```
+
+#### Assign by index
+
+```html
+<!-- scores[0] = 99 -->
+<div class="index-assign">
+  <var class="scores"></var>
+  <span class="integer">0</span>
+  <span class="integer">99</span>
+</div>
+```
+
+#### Push (append to end)
+
+```html
+<div class="push">
+  <var class="scores"></var>
+  <span class="integer">40</span>
+</div>
+```
+
+#### Pop (remove and return last element)
+
+```html
+<var class="integer" id="last">
+  <div class="pop">
+    <var class="scores"></var>
+  </div>
+</var>
+```
+
+#### Length
+
+Returns an `integer`. Also works on strings and maps.
+
+```html
+<p>
+  <div class="length">
+    <var class="scores"></var>
+  </div>
 </p>
 ```
 
 ---
 
-<a name="maps"></a>
-## Maps
+### Maps
 
-Maps are Python-style dictionaries — string keys with values of any type (integer, double, string, boolean, or even nested maps). Declare a map with `<div class="map" id="{name}">`. Each key-value pair is a child `<div>` whose class is the key name and whose content is the value expression.
+A map is a string-keyed dictionary. Values can be any type.
 
-### Declaration
+#### Declaration
+
+The `class` attribute of each child div is used as the key.
 
 ```html
 <div class="map" id="person">
-    <div class="name"><span class="string">"alice"</span></div>
-    <div class="age"><span class="integer">30</span></div>
-    <div class="score"><span class="double">9.5</span></div>
-    <div class="active"><span class="boolean">true</span></div>
+  <div class="name"><span class="string">"Alice"</span></div>
+  <div class="age"><span class="integer">30</span></div>
+  <div class="active"><span class="boolean">true</span></div>
 </div>
 ```
 
-### Get a Value
-
-Use `<div class="map-get">` with a `<var>` reference to the map and a `<div class="key">` containing the key as a string literal.
+#### Get a value
 
 ```html
+<!-- person["name"] -->
 <p>
-    <div class="map-get">
-        <var class="person"></var>
-        <div class="key"><span class="string">"name"</span></div>
-    </div>
+  <div class="map-get">
+    <var class="person"></var>
+    <div class="key"><span class="string">"name"</span></div>
+  </div>
 </p>
 ```
 
-### Store a Value into a Variable
+#### Set a value
 
 ```html
-<var class="string" id="person-name">
-    <div class="map-get">
-        <var class="person"></var>
-        <div class="key"><span class="string">"name"</span></div>
-    </div>
-</var>
-
-<p><var class="person-name"></var></p>
-```
-
-### Set / Update a Value
-
-Use `<div class="map-set">` to insert a new key or update an existing one.
-
-```html
-<!-- update existing key -->
 <div class="map-set">
-    <var class="person"></var>
-    <div class="key"><span class="string">"age"</span></div>
-    <div class="value"><span class="integer">31</span></div>
-</div>
-
-<!-- add a new key -->
-<div class="map-set">
-    <var class="person"></var>
-    <div class="key"><span class="string">"email"</span></div>
-    <div class="value"><span class="string">"alice@email.com"</span></div>
+  <var class="person"></var>
+  <div class="key"><span class="string">"age"</span></div>
+  <div class="value"><span class="integer">31</span></div>
 </div>
 ```
 
-### Remove a Key
+#### Remove a key
 
 ```html
 <div class="map-remove">
-    <var class="person"></var>
-    <div class="key"><span class="string">"active"</span></div>
+  <var class="person"></var>
+  <div class="key"><span class="string">"active"</span></div>
 </div>
 ```
 
-### Check if a Key Exists
+#### Check if a key exists
 
-`map-contains` returns a boolean — use it in a conditional or print it directly.
+Returns `boolean`. Always use this before `map-get` if the key might not be present.
 
 ```html
-<!-- prints true or false -->
-<p>
+<div class="conditional">
+  <div class="if">
     <div class="map-contains">
-        <var class="person"></var>
-        <div class="key"><span class="string">"name"</span></div>
+      <var class="person"></var>
+      <div class="key"><span class="string">"email"</span></div>
     </div>
+    <p>
+      <div class="map-get">
+        <var class="person"></var>
+        <div class="key"><span class="string">"email"</span></div>
+      </div>
+    </p>
+  </div>
+</div>
+```
+
+---
+
+### User input
+
+Reads a line from stdin and returns it as a `string`. It takes no children.
+
+```html
+<p><span class="string">"Enter your name: "</span></p>
+
+<var class="string" id="username">
+  <div class="input"></div>
+</var>
+
+<p>
+  <div class="+">
+    <span class="string">"Hello, "</span>
+    <var class="username"></var>
+  </div>
+</p>
+```
+
+---
+
+### HTTP requests
+
+#### GET
+
+Sends a GET request and stores the JSON response as a `map` with the given `id`.
+
+```html
+<div class="http-get" id="RESPONSENAME">
+  <div class="url">
+    <span class="string">"https://example.com/api/endpoint"</span>
+  </div>
+</div>
+```
+
+```html
+<div class="http-get" id="todo">
+  <div class="url">
+    <span class="string">"https://jsonplaceholder.typicode.com/todos/1"</span>
+  </div>
+</div>
+
+<p>
+  <div class="map-get">
+    <var class="todo"></var>
+    <div class="key"><span class="string">"title"</span></div>
+  </div>
+</p>
+```
+
+JSON objects become maps, and JSON arrays become typed lists. If the request fails, the response map contains an `"error"` key with a description.
+
+#### POST
+
+Sends a POST request with a map variable serialised as the JSON body.
+
+```html
+<div class="http-post" id="RESPONSENAME">
+  <div class="url">
+    <span class="string">"https://example.com/api/endpoint"</span>
+  </div>
+  <div class="body">
+    <var class="MAPNAME"></var>
+  </div>
+</div>
+```
+
+```html
+<div class="map" id="payload">
+  <div class="title"><span class="string">"Buy milk"</span></div>
+  <div class="done"><span class="boolean">false</span></div>
+</div>
+
+<div class="http-post" id="created">
+  <div class="url">
+    <span class="string">"https://jsonplaceholder.typicode.com/todos"</span>
+  </div>
+  <div class="body">
+    <var class="payload"></var>
+  </div>
+</div>
+
+<p>
+  <div class="map-get">
+    <var class="created"></var>
+    <div class="key"><span class="string">"id"</span></div>
+  </div>
+</p>
+```
+
+---
+
+### HTTP server
+
+```html
+<div class="server" id="PORT">
+  <div class="endpoint-get" id="/PATH">
+    <div class="handler">
+      STATEMENTS...
+      <div class="respond">RESPONSE_VALUE</div>
+    </div>
+  </div>
+  <div class="endpoint-post" id="/PATH">
+    <div class="handler">
+      STATEMENTS...
+      <div class="respond">RESPONSE_VALUE</div>
+    </div>
+  </div>
+</div>
+```
+
+Inside every handler, two variables are automatically available:
+
+- `params` — a `map` of query string key/value pairs
+- `body` — a `map` of the parsed JSON request body (POST only)
+
+The value passed to `<div class="respond">` becomes the HTTP response body. Maps are serialised to JSON automatically.
+
+```html
+<div class="server" id="8080">
+
+  <div class="endpoint-get" id="/hello">
+    <div class="handler">
+      <div class="respond">
+        <span class="string">"Hello from HAPL!"</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="endpoint-post" id="/echo">
+    <div class="handler">
+      <div class="respond">
+        <var class="body"></var>
+      </div>
+    </div>
+  </div>
+
+</div>
+```
+
+```
+$ HAPL server.html
+HAPL server running on http://localhost:8080
+
+$ curl http://localhost:8080/hello
+Hello from HAPL!
+
+$ curl -X POST http://localhost:8080/echo \
+    -H "Content-Type: application/json" \
+    -d '{"message": "hi"}'
+{"message":"hi"}
+```
+
+Query string parameters are available via the `params` map:
+
+```html
+<div class="endpoint-get" id="/greet">
+  <div class="handler">
+    <div class="respond">
+      <div class="+">
+        <span class="string">"Hello, "</span>
+        <div class="map-get">
+          <var class="params"></var>
+          <div class="key"><span class="string">"name"</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+```
+$ curl "http://localhost:8080/greet?name=Alice"
+Hello, Alice
+```
+
+---
+
+## Keyword remapping
+
+You can provide a JSON config file to give any HAPL keyword a custom name or alias. This is useful for shorthand, or writing HAPL programs in a different spoken language.
+
+```bash
+HAPL myprogram.html --keyword-configs remap.json
+```
+
+The config file maps your custom name to the real HAPL keyword:
+
+```json
+{
+  "afficher": "p",
+  "ajouter": "+",
+  "egal": "equal"
+}
+```
+
+With this loaded you can write `<div class="egal">` instead of `<div class="equal">`. Any keyword can be remapped — operators, type names, control flow, everything.
+
+---
+
+## Complete examples
+
+### FizzBuzz
+
+```html
+<html>
+<body>
+
+<div class="for">
+  <div class="iterator"><var class="i"></var></div>
+  <div class="condition">
+    <div class="less_equal">
+      <var class="i"></var>
+      <span class="integer">100</span>
+    </div>
+  </div>
+  <div class="increment"><span class="integer">1</span></div>
+  <div class="body">
+    <div class="conditional">
+      <div class="if">
+        <div class="equal">
+          <div class="%"><var class="i"></var><span class="integer">15</span></div>
+          <span class="integer">0</span>
+        </div>
+        <p><span class="string">"FizzBuzz"</span></p>
+      </div>
+      <div class="elif">
+        <div class="equal">
+          <div class="%"><var class="i"></var><span class="integer">3</span></div>
+          <span class="integer">0</span>
+        </div>
+        <p><span class="string">"Fizz"</span></p>
+      </div>
+      <div class="elif">
+        <div class="equal">
+          <div class="%"><var class="i"></var><span class="integer">5</span></div>
+          <span class="integer">0</span>
+        </div>
+        <p><span class="string">"Buzz"</span></p>
+      </div>
+      <div class="else">
+        <p><var class="i"></var></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
+```
+
+---
+
+### Factorial (recursive)
+
+```html
+<html>
+<body>
+
+<div class="integer-function" id="factorial">
+  <div class="params">
+    <div class="integer-param" id="n"></div>
+  </div>
+  <div class="body">
+    <div class="conditional">
+      <div class="if">
+        <div class="less_equal">
+          <var class="n"></var>
+          <span class="integer">1</span>
+        </div>
+        <div class="return"><span class="integer">1</span></div>
+      </div>
+    </div>
+    <div class="return">
+      <div class="*">
+        <var class="n"></var>
+        <div class="factorial">
+          <div class="args">
+            <div class="-">
+              <var class="n"></var>
+              <span class="integer">1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p>
+  <div class="factorial">
+    <div class="args"><span class="integer">10</span></div>
+  </div>
 </p>
 
-<!-- safe access pattern -->
-<div class="conditional">
-    <div class="if">
-        <div class="map-contains">
-            <var class="person"></var>
-            <div class="key"><span class="string">"email"</span></div>
-        </div>
-        <p>
-            <div class="map-get">
-                <var class="person"></var>
-                <div class="key"><span class="string">"email"</span></div>
-            </div>
-        </p>
-    </div>
-    <div class="else">
-        <p><span class="string">"no email set"</span></p>
-    </div>
-</div>
+</body>
+</html>
 ```
 
-### Nested Maps
+---
 
-A map value can itself be a map. Declare the inner map inline (with an empty `id`) as the value of a key.
+### Sum a list
 
 ```html
-<div class="map" id="company">
-    <div class="name"><span class="string">"Acme"</span></div>
-    <div class="ceo">
-        <div class="map" id="">
-            <div class="name"><span class="string">"bob"</span></div>
-            <div class="age"><span class="integer">50</span></div>
-        </div>
-    </div>
+<html>
+<body>
+
+<div class="integer-list" id="numbers">
+  <span class="integer">10</span>
+  <span class="integer">20</span>
+  <span class="integer">30</span>
+  <span class="integer">40</span>
+  <span class="integer">50</span>
 </div>
 
-<!-- extract the nested map into a variable -->
-<var class="map" id="ceo">
-    <div class="map-get">
-        <var class="company"></var>
-        <div class="key"><span class="string">"ceo"</span></div>
-    </div>
-</var>
+<var class="integer" id="total"><span class="integer">0</span></var>
+<var class="integer" id="idx"><span class="integer">0</span></var>
 
-<!-- then access its fields normally -->
-<var class="string" id="ceo-name">
-    <div class="map-get">
-        <var class="ceo"></var>
-        <div class="key"><span class="string">"name"</span></div>
+<div class="while">
+  <div class="condition">
+    <div class="less">
+      <var class="idx"></var>
+      <div class="length"><var class="numbers"></var></div>
     </div>
-</var>
+  </div>
+  <div class="body">
+    <var class="total">
+      <div class="+">
+        <var class="total"></var>
+        <div class="index">
+          <var class="numbers"></var>
+          <var class="idx"></var>
+        </div>
+      </div>
+    </var>
+    <var class="idx">
+      <div class="+"><var class="idx"></var><span class="integer">1</span></div>
+    </var>
+  </div>
+</div>
 
-<p><var class="ceo-name"></var></p>
+<p><var class="total"></var></p>
+
+</body>
+</html>
 ```
 
-### Maps as Function Parameters and Return Values
+---
 
-Maps can be passed to functions and returned from them using the `map-param` and `map-function` types.
+### Map as a record
 
 ```html
-<!-- function that takes a map and returns an updated map -->
-<div class="map-function" id="birthday">
-    <div class="params">
-        <div class="map-param" id="person"></div>
-    </div>
-    <div class="body">
-        <div class="map-set">
-            <var class="person"></var>
-            <div class="key"><span class="string">"age"</span></div>
-            <div class="value">
-                <div class="+">
-                    <div class="map-get">
-                        <var class="person"></var>
-                        <div class="key"><span class="string">"age"</span></div>
-                    </div>
-                    <span class="integer">1</span>
-                </div>
-            </div>
-        </div>
-        <div class="return">
-            <var class="person"></var>
-        </div>
-    </div>
+<html>
+<body>
+
+<div class="map" id="user">
+  <div class="name"><span class="string">"Alice"</span></div>
+  <div class="score"><span class="integer">0</span></div>
 </div>
 
-<!-- call it and store the result -->
-<div class="map" id="alice">
-    <div class="name"><span class="string">"alice"</span></div>
-    <div class="age"><span class="integer">30</span></div>
+<!-- Increment the score -->
+<div class="map-set">
+  <var class="user"></var>
+  <div class="key"><span class="string">"score"</span></div>
+  <div class="value">
+    <div class="+">
+      <div class="map-get">
+        <var class="user"></var>
+        <div class="key"><span class="string">"score"</span></div>
+      </div>
+      <span class="integer">10</span>
+    </div>
+  </div>
 </div>
 
-<var class="map" id="updated">
-    <div class="birthday">
-        <div class="args">
-            <var class="alice"></var>
+<p>
+  <div class="map-get">
+    <var class="user"></var>
+    <div class="key"><span class="string">"name"</span></div>
+  </div>
+</p>
+<p>
+  <div class="map-get">
+    <var class="user"></var>
+    <div class="key"><span class="string">"score"</span></div>
+  </div>
+</p>
+
+</body>
+</html>
+```
+
+---
+
+### Fetch and display an API response
+
+```html
+<html>
+<body>
+
+<div class="http-get" id="post">
+  <div class="url">
+    <span class="string">"https://jsonplaceholder.typicode.com/posts/1"</span>
+  </div>
+</div>
+
+<p>
+  <div class="map-get">
+    <var class="post"></var>
+    <div class="key"><span class="string">"title"</span></div>
+  </div>
+</p>
+<p>
+  <div class="map-get">
+    <var class="post"></var>
+    <div class="key"><span class="string">"body"</span></div>
+  </div>
+</p>
+
+</body>
+</html>
+```
+
+---
+
+### REST API server
+
+```html
+<html>
+<body>
+
+<div class="server" id="3000">
+
+  <!-- GET /hello?name=Alice -->
+  <div class="endpoint-get" id="/hello">
+    <div class="handler">
+      <div class="respond">
+        <div class="+">
+          <span class="string">"Hello, "</span>
+          <div class="map-get">
+            <var class="params"></var>
+            <div class="key"><span class="string">"name"</span></div>
+          </div>
         </div>
+      </div>
     </div>
-</var>
+  </div>
 
-<var class="integer" id="new-age">
-    <div class="map-get">
-        <var class="updated"></var>
-        <div class="key"><span class="string">"age"</span></div>
+  <!-- POST /echo — reflects the body back as JSON -->
+  <div class="endpoint-post" id="/echo">
+    <div class="handler">
+      <div class="respond">
+        <var class="body"></var>
+      </div>
     </div>
-</var>
+  </div>
 
-<p><var class="new-age"></var></p>
+</div>
+
+</body>
+</html>
 ```
 
-Output:
+---
+
+## Error messages
+
+HAPL gives detailed errors that point to the exact problem:
+
 ```
-31
+error[E04]: unknown type 'integar' in variable declaration
+  --> my_program.html
+   |
+   | <var class="integar" id="x">
+   |            ^^^^^^^^^
+   | 'integar' is not a valid type
+   |
+   = hint: valid types: integer, double, string, boolean, map
 ```
+
+Every error includes a code, a plain-English description, the offending tag with the relevant attribute highlighted, and a hint with the correct syntax.
