@@ -50,6 +50,34 @@ impl HaplLexer {
     // --------------------------------------------------
     // Top-level tag dispatcher
     // --------------------------------------------------
+    // pub(super) fn walk(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
+    //     match tag.tag_type.as_str() {
+    //         "div"  => self.walk_div(tag),
+    //         "p"    => self.walk_print(tag),
+    //         "var"  => self.walk_var(tag),
+    //         "span" => self.walk_span(tag),
+    //         "html" | "head" | "body" | "title" | "meta" | "link" => {
+    //             self.tokens.push(HaplToken::open_html_tag(tag.tag_type.clone()));
+    //             for child in &tag.child_tags {
+    //                 self.walk(child)?;
+    //             }
+    //             self.tokens.push(HaplToken::close_html_tag(tag.tag_type.clone()));
+    //             Ok(())
+    //         }
+    //         other => Err(
+    //             lexer_err(
+    //                 ErrorCode::UnknownTag,
+    //                 format!("unrecognized tag <{}>", other),
+    //             )
+    //             .with_tag(
+    //                 tag_snippet(tag),
+    //                 format!("'{}' is not a valid HAPL tag", other),
+    //             )
+    //             .with_hint("supported tags: div, p, var, span"),
+    //         ),
+    //     }
+    // }
+
     pub(super) fn walk(&mut self, tag: &HtmlTag) -> Result<(), HaplError> {
         match tag.tag_type.as_str() {
             "div"  => self.walk_div(tag),
@@ -64,17 +92,8 @@ impl HaplLexer {
                 self.tokens.push(HaplToken::close_html_tag(tag.tag_type.clone()));
                 Ok(())
             }
-            other => Err(
-                lexer_err(
-                    ErrorCode::UnknownTag,
-                    format!("unrecognized tag <{}>", other),
-                )
-                .with_tag(
-                    tag_snippet(tag),
-                    format!("'{}' is not a valid HAPL tag", other),
-                )
-                .with_hint("supported tags: div, p, var, span"),
-            ),
+            // Completely ignore unknown tags — skip them and their children
+            _ => Ok(()),
         }
     }
 

@@ -25,7 +25,7 @@ use crate::html_extractor::{parse_html_to_tags, HtmlTag};
 const DEBUG_HTML_TAGS: bool = false;
 const DEBUG_TOKENS: bool    = false;
 const DEBUG_AST: bool       = false;
-const DEBUG_RESULTS: bool   = true;
+const DEBUG_RESULTS: bool   = false;
 // ==========================================
 
 // cargo run html-location.html --keyword-configs keyword-remap-location.json

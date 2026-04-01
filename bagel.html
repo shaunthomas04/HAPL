@@ -1,9 +1,138 @@
 <!DOCTYPE html>
 <html>
-<head><title>HAPL Multi-Route Server</title></head>
-<body>
+<head>
+    <title>HAPL Multi-Route Server</title>
+      <style>
+        body {
+            font-family: 'Georgia', serif;
+            background-color: #fdfaf6;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
 
-    <div class="server" id="8080">
+        main {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 25px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border-radius: 12px;
+        }
+
+        /* Image section */
+        .image-container {
+            width: 400px;
+            height: 200px;
+            margin: 0 auto 30px auto;
+            background-color: #eae0d5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 15px;
+            color: #6a3e2b;
+        }
+
+        h2 {
+            font-size: 1.4em;
+            margin-bottom: 8px;
+            color: #52312a;
+            border-bottom: 1px solid #e0d6cd;
+            padding-bottom: 4px;
+        }
+
+        p {
+            line-height: 1.5;
+            font-size: 1em;
+            margin-bottom: 10px;
+        }
+
+        ul {
+            margin-left: 18px;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        .highlight {
+            font-weight: bold;
+            color: #8b4f36;
+        }
+
+        .quote {
+            font-style: italic;
+            color: #5c4033;
+            border-left: 3px solid #8b4f36;
+            padding-left: 8px;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="image-container">
+            <img src="https://food.fnr.sndimg.com/content/dam/images/food/fullset/2022/02/16/0/FNM_030122-Homemade-Bagels_s4x3.jpg.rend.hgtvcom.1280.1280.suffix/1645023418907.webp" alt="Delicious bagels">
+        </div>
+
+        <div class="section">
+            <h1>Bagel Recipes</h1>
+            <p>Bagels are a versatile treat, perfect for breakfast, brunch, or a snack. Explore these classic and flavorful recipes that you can make at home.</p>
+        </div>
+
+        <div class="section">
+            <h2>Classic New York Bagels</h2>
+            <p>Chewy, golden-brown bagels boiled before baking, iconic for their texture.</p>
+            <ul>
+                <li><span class="highlight">Ingredients:</span> Bread flour, yeast, sugar, salt, water.</li>
+                <li><span class="highlight">Method:</span> Mix dough, rise, shape, boil briefly, bake until golden.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Cinnamon Raisin Bagels</h2>
+            <p>Sweet, aromatic, and perfect for cozy breakfasts.</p>
+            <ul>
+                <li><span class="highlight">Ingredients:</span> Bread flour, yeast, sugar, salt, water, cinnamon, raisins.</li>
+                <li><span class="highlight">Method:</span> Fold cinnamon and raisins into dough, shape, boil, bake.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Everything Bagels</h2>
+            <p>Savory bagels loaded with seeds and seasonings.</p>
+            <ul>
+                <li><span class="highlight">Ingredients:</span> Bread flour, yeast, water, salt, sesame seeds, poppy seeds, garlic, onion flakes.</li>
+                <li><span class="highlight">Method:</span> Shape dough, brush with water, coat with seasoning, boil, bake.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Gluten-Free Bagels</h2>
+            <p>Soft and chewy, perfect for dietary restrictions.</p>
+            <ul>
+                <li><span class="highlight">Ingredients:</span> Gluten-free flour blend, yeast, sugar, salt, xanthan gum, water.</li>
+                <li><span class="highlight">Method:</span> Mix, rise, shape, boil carefully, bake until firm.</li>
+            </ul>
+        </div>
+    </main>
+
+    <div class="server" id="8080" style="color: #fdfaf6;">
 
         <!-- GET /hello?name=shaun -->
         <div class="endpoint-get" id="/hello">
